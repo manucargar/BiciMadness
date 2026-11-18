@@ -1,0 +1,61 @@
+id_estacion,nombre,grupo,motivo,salidas_totales,media_salidas_hora,dist_sol_km,lat,lon,r2_primera_ronda
+43,Plaza de la Cebada,demanda_alta,86838 salidas,86838,4.65,0.77,40.411274,-3.708834,
+57,Plaza de Lavapiés,demanda_alta,81548 salidas,81548,4.366,0.99,40.408306,-3.700711,
+208,Quevedo,demanda_alta,65083 salidas,65083,3.485,1.87,40.433694,-3.704667,
+175,Segovia 45,demanda_alta,64238 salidas,64238,3.44,1.23,40.413736,-3.717487,
+90,Puerta de Madrid,demanda_alta,62319 salidas,62319,3.337,2.06,40.421501,-3.680008,
+220,Marqués de Vadillo,demanda_alta,61668 salidas,61668,3.302,2.35,40.398247,-3.716591,
+49,Puerta de Toledo,demanda_alta,57742 salidas,57742,3.092,1.27,40.407036,-3.711051,
+45,Antón Martín,demanda_alta,57737 salidas,57737,3.092,0.65,40.412205,-3.699115,
+132,Paseo de la Florida,demanda_alta,57545 salidas,57545,3.081,1.69,40.421967,-3.722498,
+64,Plaza de la Independencia,demanda_alta,53824 salidas,53824,2.882,1.33,40.419752,-3.688398,
+257,Manuel Caldeiro,demanda_baja,5653 salidas,5653,0.303,7.11,40.47938,-3.68532,
+225,Pedro Rico,demanda_baja,6294 salidas,6294,0.337,7.25,40.481086,-3.688463,
+229,Pavones,demanda_baja,7134 salidas,7134,0.382,6.13,40.400368,-3.634587,
+258,Serrano 113,demanda_baja,7350 salidas,7350,0.394,3.06,40.44106,-3.68609,
+267,Ciudad Universitaria 2,demanda_baja,8243 salidas,8243,0.441,3.54,40.44342,-3.72693,
+248,Avenida Brasilia,demanda_baja,8530 salidas,8530,0.457,4.22,40.43666,-3.66096,
+238,Carlota O’Neill,demanda_baja,8725 salidas,8725,0.467,5.5,40.443705,-3.648958,
+239,Derechos Humanos,demanda_baja,8935 salidas,8935,0.478,4.77,40.439657,-3.655766,
+263,López Pozas,demanda_baja,9024 salidas,9024,0.483,5.42,40.46361,-3.68514,
+261,Doctor Fleming,demanda_baja,9399 salidas,9399,0.503,4.47,40.45546,-3.68844,
+1,Puerta del Sol A,centrica,Puerta del Sol (153 m),32152,1.722,0.15,40.417214,-3.701834,
+35,Calle Mayor,centrica,Plaza Mayor (104 m),20989,1.124,0.29,40.416364,-3.706897,
+15,Ventura Rodríguez,centrica,Plaza de España (329 m),28495,1.526,1.32,40.426096,-3.713479,
+25,Jacometrezo,centrica,Callao / Gran Vía (50 m),29093,1.558,0.43,40.420078,-3.706538,
+40,Conde de Romanones,centrica,Palacio Real / Ópera (249 m),21005,1.125,0.7,40.4168,-3.71183,
+91,Cibeles,centrica,Cibeles (78 m),33110,1.773,0.89,40.418652,-3.69335,
+113,Columela,centrica,Puerta de Alcalá / Retiro (173 m),28204,1.51,1.38,40.421525,-3.688437,
+72,Espalter,centrica,Museo del Prado (132 m),18929,1.014,1.15,40.412837,-3.691202,
+85,Atocha B,centrica,Atocha (112 m),17122,0.917,1.55,40.40749,-3.690123,
+98,Plaza de Colón,centrica,Plaza de Colón (98 m),12583,0.674,1.55,40.425705,-3.68937,
+256,Torre Cepsa,afueras,6.5 km de Sol,11771,0.63,6.52,40.47435,-3.68797,
+223,Gutierre de Cetina,afueras,5.5 km de Sol,15355,0.822,5.49,40.429706,-3.640994,
+262,Pío XII,afueras,5.3 km de Sol,14203,0.76,5.33,40.46041,-3.67712,
+237,C.D. Concepción,afueras,5.2 km de Sol,14686,0.786,5.19,40.437151,-3.648359,
+227,Marroquina,afueras,4.9 km de Sol,15957,0.854,4.91,40.408264,-3.646697,
+214,Metro Tetuán,afueras,4.9 km de Sol,25452,1.363,4.89,40.46075,-3.698993,
+222,Condesa de Venadito,afueras,4.9 km de Sol,10650,0.57,4.88,40.44315,-3.65741,
+269,Facultad Derecho,afueras,4.4 km de Sol,10795,0.578,4.38,40.45109,-3.72937,
+144,Serrano 210,afueras,4.2 km de Sol,10329,0.553,4.22,40.451019,-3.681796,
+234,Sierra Toledana,afueras,4.1 km de Sol,15539,0.832,4.14,40.399015,-3.660777,
+30,Plaza de las Salesas,facil,R² = 0.510,45183,2.419,1.09,40.423855,-3.694475,0.51
+170,Juan Bravo 50,facil,R² = 0.481,45467,2.435,2.91,40.432366,-3.675855,0.4815
+9,Alonso Martínez,facil,R² = 0.477,52453,2.809,1.4,40.427868,-3.69544,0.4775
+79,Menéndez Pelayo,facil,R² = 0.476,43516,2.33,2.34,40.40828,-3.678484,0.4758
+181,Puente Praga,facil,R² = 0.474,33894,1.815,2.09,40.39818,-3.702392,0.4737
+84,Atocha A,facil,R² = 0.465,36448,1.952,1.54,40.407568,-3.690225,0.4653
+100,Villanueva,facil,R² = 0.465,18676,1.0,1.54,40.422658,-3.687055,0.4653
+210,Parque Santander,facil,R² = 0.456,33779,1.809,2.72,40.441139,-3.708083,0.4564
+206,Rubén Darío,facil,R² = 0.456,31564,1.69,2.07,40.433111,-3.691556,0.4555
+149,Glorieta de los Cuatro Caminos,facil,R² = 0.444,53777,2.879,3.27,40.446367,-3.703667,0.4437
+60,Plaza del Carmen,dificil,R² = 0.031,12654,0.678,0.17,40.418419,-3.703241,0.031
+250,Avenida Bruselas,dificil,R² = 0.119,10826,0.58,4.2,40.43865,-3.66301,0.1193
+36,Plaza de la Provincia,dificil,R² = 0.123,19037,1.019,0.3,40.41501,-3.706103,0.1235
+105,Palacio de Deportes,dificil,R² = 0.131,16933,0.907,2.67,40.42478,-3.67384,0.1309
+195,Alcalá-Ventas,dificil,R² = 0.157,18760,1.004,3.67,40.430167,-3.663889,0.1566
+54,Museo Reina Sofía,dificil,R² = 0.192,32213,1.725,1.29,40.408368,-3.693346,0.192
+120,Pintor Rosales,dificil,R² = 0.209,16966,0.908,1.86,40.427657,-3.720513,0.2091
+249,Camilo José Cela,dificil,R² = 0.225,13874,0.743,3.82,40.4378,-3.66779,0.2249
+3,Miguel Moya,dificil,R² = 0.228,30091,1.611,0.45,40.420589,-3.705842,0.228
+10,Plaza de San Miguel,dificil,R² = 0.230,32164,1.722,0.52,40.415606,-3.709508,0.2295
