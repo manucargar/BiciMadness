@@ -1,0 +1,25 @@
+# entorno y editor
+.venv/
+.idea/
+.claude/
+__pycache__/
+.DS_Store
+
+# memoria local de MemPalace (no es del proyecto)
+entities.json
+mempalace.yaml
+
+# resultados (se regeneran al ejecutar)
+results/
+
+# datos brutos de BiciMAD (2,2 GB, ficheros > 100 MB): se descargan, ver README
+data/raw/bicimad_2021/
+data/raw/bicimad_2022/
+data/raw/bicimad_2023/
+
+# ficheros anuales de Meteostat (weather.py los descarga solo)
+data/raw/meteo/
+
+# caché de count_stations.py y muestra de la primera ronda (se regeneran)
+data/cache/
+data/processed/salidas_por_hora_muestra.csv

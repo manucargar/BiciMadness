@@ -1,14 +1,17 @@
-"""Modelos para predecir las salidas de la hora siguiente en las 60 estaciones seleccionadas.
+"""RNA para predecir las salidas de la hora siguiente en cada estación (BiciMAD) - 60 estaciones seleccionadas.
 
-Por defecto se entrena una red global con calendario y meteorología. Se puede seleccionar
-una red por estación, o comparar ambos enfoques, y variar ventanas y atributos.
+Igual que model_per_station.py, pero por defecto: red global, salidas_por_hora_sel60.csv, todos los atributos
+(calendario + temperatura + precipitación), capas ocultas 64 y 32, --jobs 2 y resultados en results/selected_60/.
+Después:  python src/bicimadness/analyze_groups.py
 
-Uso:  python src/bicimadness/model_selected60.py
-      python src/bicimadness/model_selected60.py --ventanas 24 48 --semanas 26 52
-      python src/bicimadness/model_selected60.py --modelo estacion global
-      python src/bicimadness/analyze_groups.py
+Uso:  python src/bicimadness/model_selected60.py                            -> red global, ventana 24h, entrenando con 1 año
+      python src/bicimadness/model_selected60.py   --ventanas 24 48 --semanas 26 52  -> compara todas las combinaciones
+      python src/bicimadness/model_selected60.py   --atributos hora,dia_semana,mes,festivo hora,dia_semana,mes,festivo,temperatura,precipitacion
+                                                                 -> compara dos conjuntos de atributos
+      python src/bicimadness/model_selected60.py   --modelo estacion global          -> una red por estación vs una red para todas
 
-El modelo global incorpora el identificador de estación como variable nominal (one-hot).
+Modelos: "estacion" entrena una red por estación; "global" una sola red con los datos de las 50
+estaciones, donde la estación entra como atributo nominal (one-hot).
 
 Por cada estación (o la red global) y cada ventana:
   - objetivo: salidas de la hora siguiente
@@ -34,10 +37,10 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-RAIZ = Path(__file__).resolve().parents[2]
-DATOS = RAIZ / "data" / "processed" / "salidas_por_hora_sel60.csv"
-METEO = RAIZ / "data" / "raw" / "meteo_horario.csv"
-RESULTADOS = RAIZ / "results" / "selected_60"
+PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+DATOS = PROYECTO / "data" / "processed" / "salidas_por_hora_sel60.csv"
+METEO = PROYECTO / "data" / "raw" / "meteo_horario.csv"
+RESULTADOS = PROYECTO / "results" / "selected_60"
 # atributos que se pueden meter en la red (de la hora a predecir)
 ATRIBUTOS = {
     "hora": "hora del día, nominal (24 columnas 0/1)",
@@ -54,22 +57,19 @@ _args.add_argument("--atributos", nargs="+", default=["hora,dia_semana,mes,festi
                    help="conjuntos de atributos separados por comas; varios conjuntos se comparan entre sí. "
                         "Disponibles: " + ", ".join(ATRIBUTOS))
 _args.add_argument("--modelo", nargs="+", default=["global"], choices=["estacion", "global"],
-                   help="estacion = una red por estación; global = una sola red para las 60 estaciones "
+                   help="estacion = una red por estación; global = una sola red para las 50 estaciones "
                         "(la estación entra como atributo nominal). Con los dos se comparan.")
-_args.add_argument("--datos", default=str(DATOS),
+_args.add_argument("--datos", default=str(DATOS.relative_to(PROYECTO)),
                    help="CSV de salidas por hora (por defecto las 60 estaciones seleccionadas)")
-_args.add_argument("--resultados", default=str(RESULTADOS), help="carpeta donde se guardan los resultados")
+_args.add_argument("--resultados", default=str(RESULTADOS.relative_to(PROYECTO)),
+                   help="carpeta donde se guardan los resultados (rutas relativas: desde la raíz del repositorio)")
 _args.add_argument("--ocultas-global", type=int, nargs="+", default=[64, 32],
                    help="neuronas de cada capa oculta de la red global (64 32 = dos capas de 64 y 32)")
 _args.add_argument("--jobs", type=int, default=2,
                    help="folds de la red global en paralelo (cada uno ocupa memoria: bajadlo si hay poca RAM)")
 _args = _args.parse_known_args()[0]
-DATOS = Path(_args.datos)
-RESULTADOS = Path(_args.resultados)
-if not DATOS.is_absolute():
-    DATOS = RAIZ / DATOS
-if not RESULTADOS.is_absolute():
-    RESULTADOS = RAIZ / RESULTADOS
+DATOS = PROYECTO / _args.datos  # una ruta absoluta se queda como está
+RESULTADOS = PROYECTO / _args.resultados
 MODELOS = _args.modelo
 VENTANAS = _args.ventanas
 ENTRENOS = _args.semanas
@@ -78,7 +78,7 @@ for _a in {a for c in CONJUNTOS for a in c} - set(ATRIBUTOS):
     raise SystemExit(f"atributo desconocido '{_a}'. Disponibles: {', '.join(ATRIBUTOS)}")
 TEST_H = 2 * 7 * 24     # 2 semanas de test; la ventana se desliza esto cada vez
 OCULTAS = (32, 16)         # neuronas de las capas ocultas (red por estación)
-OCULTAS_GLOBAL = tuple(_args.ocultas_global)
+OCULTAS_GLOBAL = tuple(_args.ocultas_global)  # la red global ve 50 veces más datos -> algo más grande
 
 
 def cargar():
@@ -192,7 +192,7 @@ def main():
         # ponytail: --jobs (4 por defecto) porque cada fold global junta los datos de todas las estaciones (~0,2 GB con 50)
         res += Parallel(n_jobs=_args.jobs)(delayed(evaluar_global)(k, s, series, cals, horas) for k, s in folds(len(fechas)))
 
-    RESULTADOS.mkdir(exist_ok=True)
+    RESULTADOS.mkdir(parents=True, exist_ok=True)
     filas = [f for r, _ in res for f in r]
     with open(RESULTADOS / "resultados_folds.csv", "w", newline="") as f:
         csv.writer(f).writerows([["config", "id_estacion", "fold", "mae", "rmse", "r2"], *filas])

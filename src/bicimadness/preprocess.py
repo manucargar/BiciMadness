@@ -7,7 +7,7 @@ Sábado y domingo no se marcan aparte: ya los da dia_semana.
 Fuentes:
   - CSV trips_AA_MM_Mes.csv (junio 2021 - febrero 2023), hora local de Madrid
   - JSON AAAAMM_movements.json / .zip (formato antiguo, enero - mayo 2021), hora en UTC
-Todos en las CARPETAS (bicimad_2021, bicimad_2022, bicimad_2023).
+Todos en las CARPETAS (data/raw/bicimad_2021, bicimad_2022, bicimad_2023).
 Solo cuentan viajes de MIN_SEGUNDOS o más: los CSV traen muchos desbloqueos fallidos de
 segundos que los JSON no incluyen (con el filtro, junio 2021 cuadra entre ambos formatos).
 """
@@ -21,14 +21,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-RAIZ = Path(__file__).resolve().parents[2]
-DATOS_BRUTOS = RAIZ / "data" / "raw"
-DATOS_PROCESADOS = RAIZ / "data" / "processed"
-CARPETAS = [Path(c) for c in sys.argv[1:]] or [
-    DATOS_BRUTOS / f"bicimad_{anio}" for anio in (2021, 2022, 2023)
-]
-SALIDA = DATOS_PROCESADOS / "salidas_por_hora_top50.csv"
-CALENDARIO = DATOS_BRUTOS / "calendario_laboral.csv"
+PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+CARPETAS = [Path(c) for c in sys.argv[1:]] or [PROYECTO / "data" / "raw" / f"bicimad_{anio}" for anio in (2021, 2022, 2023)]
+SALIDA = PROYECTO / "data" / "processed" / "salidas_por_hora_top50.csv"
+CALENDARIO = PROYECTO / "data" / "raw" / "calendario_laboral.csv"
 TOP_N = 50
 MIN_SEGUNDOS = 120
 MADRID = ZoneInfo("Europe/Madrid")
@@ -104,30 +100,34 @@ def sumar(fichero, viajes):
     print(f"{fichero.name}: {n} viajes")
 
 
-for fichero in sorted(f for c in CARPETAS for f in c.glob("*.csv")):
-    sumar(fichero, leer_csv(fichero))
-meses_csv = {h[:7] for h, _ in conteo}
-for fichero in ficheros_json(meses_csv):
-    sumar(fichero, leer_json(fichero))
+def main():
+    for fichero in sorted(f for c in CARPETAS for f in c.glob("*.csv")):
+        sumar(fichero, leer_csv(fichero))
+    meses_csv = {h[:7] for h, _ in conteo}
+    for fichero in ficheros_json(meses_csv):
+        sumar(fichero, leer_json(fichero))
 
-top = [est for est, _ in total.most_common(TOP_N)]
-horas = sorted({h for h, _ in conteo})
-inicio, fin = (datetime.strptime(h, "%Y-%m-%dT%H") for h in (horas[0], horas[-1]))
+    top = [est for est, _ in total.most_common(TOP_N)]
+    horas = sorted({h for h, _ in conteo})
+    inicio, fin = (datetime.strptime(h, "%Y-%m-%dT%H") for h in (horas[0], horas[-1]))
 
-DATOS_PROCESADOS.mkdir(parents=True, exist_ok=True)
-with open(SALIDA, "w", newline="", encoding="utf-8") as f:
-    w = csv.writer(f)
-    w.writerow(["fecha_hora", "id_estacion", "dia_semana", "mes", "festivo", "salidas"])
-    t = inicio
-    while t <= fin:  # todas las horas, también las que no tienen viajes (0 salidas)
-        clave = t.strftime("%Y-%m-%dT%H")
-        for e in top:  # 50 filas por hora, una por estación
-            w.writerow([t.strftime("%Y-%m-%d %H:00"), e, t.isoweekday(), t.month, int(TIPO_DIA[t.date()] == "festivo"), conteo[clave, e]])
-        t += timedelta(hours=1)
+    with open(SALIDA, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["fecha_hora", "id_estacion", "dia_semana", "mes", "festivo", "salidas"])
+        t = inicio
+        while t <= fin:  # todas las horas, también las que no tienen viajes (0 salidas)
+            clave = t.strftime("%Y-%m-%dT%H")
+            for e in top:  # 50 filas por hora, una por estación
+                w.writerow([t.strftime("%Y-%m-%d %H:00"), e, t.isoweekday(), t.month, int(TIPO_DIA[t.date()] == "festivo"), conteo[clave, e]])
+            t += timedelta(hours=1)
 
-with open(SALIDA.with_name("estaciones_top50.csv"), "w", newline="", encoding="utf-8") as f:
-    w = csv.writer(f)
-    w.writerow(["columna", "id_estacion", "nombre", "salidas_totales"])
-    w.writerows([f"est_{e}", e, nombres.get(e, ""), total[e]] for e in top)
+    with open(SALIDA.with_name("estaciones_top50.csv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["columna", "id_estacion", "nombre", "salidas_totales"])
+        w.writerows([f"est_{e}", e, nombres.get(e, ""), total[e]] for e in top)
 
-print(f"{SALIDA.name}: {int((fin - inicio).total_seconds() // 3600) + 1} horas x {len(top)} estaciones")
+    print(f"{SALIDA.name}: {int((fin - inicio).total_seconds() // 3600) + 1} horas x {len(top)} estaciones")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,32 +1,32 @@
-"""Resume el MAE, RMSE y R² por grupo de las estaciones seleccionadas.
+"""MAE, RMSE y R² medios por grupo de estaciones (demanda alta/baja, céntrica/afueras, fácil/difícil).
 
-Usa estaciones_seleccionadas.csv y el error_por_estacion.csv generado por el modelo de 60 estaciones.
+Junta estaciones_seleccionadas.csv con el error_por_estacion.csv que genera model_per_station.py.
 
-Uso:  python src/bicimadness/analyze_groups.py
-      python src/bicimadness/analyze_groups.py --resultados RUTA
+Uso:  python src/bicimadness/model_selected60.py
+      python src/bicimadness/analyze_groups.py                            (lee results/selected_60/)
+      python src/bicimadness/analyze_groups.py --resultados results/otra_carpeta
 
-Lee error_por_estacion.csv de la carpeta de resultados y escribe allí errores_por_grupo.csv.
+Salida: <resultados>/errores_por_grupo.csv, una fila por grupo y configuración (red, referencia...).
+La media de salidas por hora del grupo ayuda a leer el MAE: con más demanda, más bicis de error.
 """
 import argparse
 import csv
 from collections import defaultdict
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parents[2]
-ESTACIONES = RAIZ / "data" / "processed" / "estaciones_seleccionadas.csv"
-RESULTADOS = RAIZ / "results" / "selected_60"
+PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
 GRUPOS = ["demanda_alta", "demanda_baja", "centrica", "afueras", "facil", "dificil"]
 
 
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument("--resultados", default=str(RESULTADOS), help="carpeta con error_por_estacion.csv")
+    args.add_argument("--resultados", default="results/selected_60",
+                      help="carpeta con error_por_estacion.csv (rutas relativas: desde la raíz del repositorio)")
+    args.add_argument("--estaciones", default="data/processed/estaciones_seleccionadas.csv", help="estaciones con su grupo")
     args = args.parse_args()
-    carpeta = Path(args.resultados)
-    if not carpeta.is_absolute():
-        carpeta = RAIZ / carpeta
+    carpeta = PROYECTO / args.resultados
 
-    with open(ESTACIONES, encoding="utf-8") as f:
+    with open(PROYECTO / args.estaciones, encoding="utf-8") as f:
         estaciones = {r["id_estacion"]: r for r in csv.DictReader(f)}
     with open(carpeta / "error_por_estacion.csv", encoding="utf-8") as f:
         errores = list(csv.DictReader(f))
@@ -64,8 +64,8 @@ def main():
     falta = set(estaciones) - {r["id_estacion"] for r in errores}
     if falta:
         print(f"\nAviso: {len(falta)} de las {len(estaciones)} estaciones no están en {carpeta.name}/ "
-              "(¿se entrenó con salidas_por_hora_sel60.csv?)")
-    print(f"\nGuardado en {salida}")
+              f"(¿se entrenó con los datos de {args.estaciones}?)")
+    print(f"\nGuardado en {salida.relative_to(PROYECTO)}")
 
 
 if __name__ == "__main__":
