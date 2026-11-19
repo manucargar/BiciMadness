@@ -7,24 +7,29 @@ Criterio del profesor: un conjunto limitado pero diverso según tres factores, c
                          demanda_baja         las 10 con menos salidas (de las candidatas)
   Ubicación              centrica             la más cercana a cada uno de 10 lugares emblemáticos
                          afueras              las 10 más lejos de la Puerta del Sol, separadas >= 1 km entre sí
-  Dificultad predictiva  facil / dificil      primera ronda: la RNA global de model_per_station.py sobre una muestra
-                                              al azar de 60 estaciones; las 10 con mayor y menor R² por estación
+  Dificultad predictiva  facil / dificil      primera ronda: una RNA por estación (rna/entrenar.py, todas las variables)
+                                              sobre TODAS las candidatas libres; las 10 con mayor y menor R²
+                                              por estación, calculado solo con los bloques de test anteriores a
+                                              CORTE_GRUPOS (comun/datos.py, 2022-08-01). Así, en errores_por_grupo.csv
+                                              el periodo desde_2022-08-01 mide estos grupos con semanas que no se
+                                              usaron para elegirlos.
 
 Candidatas: estaciones con al menos 30 salidas en cada uno de los 26 meses (ene 2021 - feb 2023).
 Así se quitan las que abrieron, cerraron o cambiaron de número a mitad del periodo, cuya serie
 tendría meses enteros a 0. Una estación solo entra en un grupo: los grupos se rellenan en el orden
 de la tabla y, si una ya está elegida, se pasa a la siguiente de la lista.
 
-Uso:  python src/bicimadness/count_stations.py           (una vez: cuenta todas las estaciones -> data/cache/)
-      python src/bicimadness/select_stations.py   (la primera ronda tarda; si ya hay resultados, los reutiliza)
-      python src/bicimadness/select_stations.py --repetir   (vuelve a entrenar la primera ronda)
+Uso:  python src/bicimadness/preprocesamiento/count_stations.py    (una vez: cuenta todas las estaciones -> data/cache/)
+      python src/bicimadness/preprocesamiento/select_stations.py   (la primera ronda tarda; si ya hay resultados, los reutiliza)
+      python src/bicimadness/preprocesamiento/select_stations.py --repetir     (vuelve a entrenar la primera ronda)
+      python src/bicimadness/preprocesamiento/select_stations.py --muestra 60  (primera ronda con 60 al azar, más rápida)
 
 Salidas:
   data/processed/estaciones_seleccionadas.csv   las 60 estaciones con su grupo, el motivo y sus datos
   data/processed/salidas_por_hora_sel60.csv     salidas por hora de las 60, mismo formato que salidas_por_hora_top50.csv:
-                                    python src/bicimadness/model_selected60.py
-  data/processed/salidas_por_hora_muestra.csv   datos de la primera ronda (las 60 al azar)
-  results/first_round/                          resultados de model_per_station.py sobre la muestra
+                                    python src/bicimadness/rna/entrenar.py sel60
+  data/cache/salidas_por_hora_primera_ronda.csv datos de la primera ronda
+  results/primera_ronda/                        resultados de rna/entrenar.py en la primera ronda
 """
 import argparse
 import csv
@@ -39,11 +44,13 @@ from pathlib import Path
 
 from preprocess import PROYECTO, TIPO_DIA
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
+from bicimadness.comun.datos import CORTE_GRUPOS  # noqa: E402
+
 CACHE = PROYECTO / "data" / "cache"
 POR_GRUPO = 10
 MIN_SALIDAS_MES = 30
 SEMILLA = 42
-N_MUESTRA = 60
 SEPARACION_AFUERAS_KM = 1.0
 RADIO_EMBLEMATICO_KM = 0.5
 SOL = (40.41694, -3.70361)  # km 0, Puerta del Sol
@@ -62,8 +69,9 @@ EMBLEMATICOS = {
     "Templo de Debod": (40.42400, -3.71780),
     "Plaza de Santa Ana": (40.41460, -3.70060),
 }
-MUESTRA = PROYECTO / "data" / "processed" / "salidas_por_hora_muestra.csv"
-PRIMERA_RONDA = PROYECTO / "results" / "first_round"
+MUESTRA = PROYECTO / "data" / "cache" / "salidas_por_hora_primera_ronda.csv"
+PRIMERA_RONDA = PROYECTO / "results" / "primera_ronda"
+RNA = Path(__file__).resolve().parents[1] / "rna" / "entrenar.py"
 SALIDA_EST = PROYECTO / "data" / "processed" / "estaciones_seleccionadas.csv"
 SALIDA_HORAS = PROYECTO / "data" / "processed" / "salidas_por_hora_sel60.csv"
 
@@ -115,7 +123,12 @@ def escribir_salidas(fichero, ids, conteo, inicio, fin):
 def main():
     args = argparse.ArgumentParser()
     args.add_argument("--repetir", action="store_true", help="vuelve a entrenar la primera ronda aunque ya haya resultados")
-    args.add_argument("--jobs", type=int, default=2, help="folds de la red global en paralelo (cada uno ~1 GB de RAM)")
+    args.add_argument("--jobs", type=int, help="bloques de la primera ronda en paralelo (por defecto todos los núcleos)")
+    args.add_argument("--modo", choices=["estacion", "global"], default="estacion",
+                      help="primera ronda con una red por estación (por defecto) o una red global; la global con "
+                           "~200 estaciones no cabe en 8 GB de RAM")
+    args.add_argument("--muestra", type=int, default=0,
+                      help="primera ronda con N candidatas al azar en vez de todas (0 = todas, por defecto)")
     args = args.parse_args()
 
     est = cargar_estaciones()
@@ -155,22 +168,25 @@ def main():
         if len(afueras) == POR_GRUPO:
             break
 
-    # 5-6. Dificultad predictiva: primera ronda con la RNA global sobre una muestra al azar del resto
-    muestra = sorted(random.Random(SEMILLA).sample(sorted(libres(), key=int), N_MUESTRA), key=int)
+    # 5-6. Dificultad predictiva: primera ronda con la RNA sobre las candidatas libres
+    muestra = sorted(libres(), key=int)
+    if args.muestra:
+        muestra = sorted(random.Random(SEMILLA).sample(muestra, args.muestra), key=int)
     conteo, inicio, fin = cargar_conteo()
     errores = PRIMERA_RONDA / "error_por_estacion.csv"
     hecha = errores.exists() and {r["id_estacion"] for r in csv.DictReader(open(errores, encoding="utf-8"))} == set(muestra)
     if args.repetir or not hecha:
         escribir_salidas(MUESTRA, muestra, conteo, inicio, fin)
-        print(f"Primera ronda: RNA global sobre {N_MUESTRA} estaciones al azar (semilla {SEMILLA})...", flush=True)
-        subprocess.run([sys.executable, str(Path(__file__).with_name("model_per_station.py")), "--modelo", "global",
-                        "--datos", str(MUESTRA), "--resultados", str(PRIMERA_RONDA), "--jobs", str(args.jobs)], check=True)
+        print(f"Primera ronda: RNA ({args.modo}) sobre {len(muestra)} estaciones, bloques antes de {CORTE_GRUPOS:%Y-%m-%d}...",
+              flush=True)
+        subprocess.run([sys.executable, str(RNA), str(MUESTRA), "--modo", args.modo, "--variables", "todas",
+                        "--hasta", f"{CORTE_GRUPOS:%Y-%m-%d}", "--carpeta", str(PRIMERA_RONDA),
+                        "--nombre", "primera_ronda", *(["--jobs", str(args.jobs)] if args.jobs else [])], check=True)
     else:
         print(f"Primera ronda: se reutiliza {errores.relative_to(PROYECTO)} (--repetir para entrenar de nuevo)")
     with open(errores, encoding="utf-8") as f:
         filas = list(csv.DictReader(f))
-    col = next(c for c in filas[0] if c.startswith("r2_rna_global"))
-    r2 = {r["id_estacion"]: float(r[col]) for r in filas}
+    r2 = {r["id_estacion"]: float(r["r2"]) for r in filas}
     for e in est:
         est[e]["r2_primera_ronda"] = r2.get(e, "")
     orden = sorted(muestra, key=lambda e: -r2[e])

@@ -21,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+PROYECTO = Path(__file__).resolve().parents[3]  # raíz del repositorio
 CARPETAS = [Path(c) for c in sys.argv[1:]] or [PROYECTO / "data" / "raw" / f"bicimad_{anio}" for anio in (2021, 2022, 2023)]
 SALIDA = PROYECTO / "data" / "processed" / "salidas_por_hora_top50.csv"
 CALENDARIO = PROYECTO / "data" / "raw" / "calendario_laboral.csv"

@@ -17,7 +17,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+PROYECTO = Path(__file__).resolve().parents[3]  # raíz del repositorio
 CARPETA = PROYECTO / "data" / "raw" / "meteo"  # ficheros anuales descargados
 SALIDA = PROYECTO / "data" / "raw" / "meteo_horario.csv"
 ESTACION = "08222"  # Madrid / Retiro

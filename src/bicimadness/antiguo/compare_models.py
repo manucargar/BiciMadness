@@ -1,4 +1,4 @@
-"""Comparación de modelos para predecir las salidas de la hora siguiente en cada estación (BiciMAD).
+"""[ANTIGUO] Comparación de modelos para predecir las salidas de la hora siguiente en cada estación (BiciMAD).
 
 Todos los modelos se evalúan en las mismas condiciones, para que el T-test sea justo:
   - las mismas estaciones, la misma ventana (24 h anteriores), los mismos atributos
@@ -18,9 +18,12 @@ Modelos (--modelos para elegir algunos):
 Los modelos entrenados (lineal, gradient boosting, mlp, lstm) son globales: una sola red para todas las
 estaciones, con la estación como atributo nominal (one-hot), y reciben las mismas entradas.
 
-Uso:  python src/bicimadness/compare_models.py                         -> las 60 estaciones elegidas, con meteorología
-      python src/bicimadness/compare_models.py --modelos mlp lstm      -> solo algunos modelos
-      python src/bicimadness/compare_models.py --folds-cada 1          -> todos los folds (la LSTM tarda mucho más)
+Se mantiene hasta que cada algoritmo tenga su carpeta propia (como rna/) y se compare con
+comparar_algoritmos.py. Sus resultados no usan el formato nuevo de results/<algoritmo>/.
+
+Uso:  python src/bicimadness/antiguo/compare_models.py                         -> las 60 estaciones elegidas, con meteorología
+      python src/bicimadness/antiguo/compare_models.py --modelos mlp lstm      -> solo algunos modelos
+      python src/bicimadness/antiguo/compare_models.py --folds-cada 1          -> todos los folds (la LSTM tarda mucho más)
 
 Cada fold se guarda en <resultados>/folds/ al terminar: si se corta, al volver a ejecutarlo continúa
 donde se quedó (borrad esa carpeta para empezar de cero).
@@ -43,11 +46,12 @@ from numpy.lib.stride_tricks import sliding_window_view
 from scipy.stats import ttest_rel
 from sklearn.ensemble import HistGradientBoostingRegressor
 from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 
-PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+PROYECTO = Path(__file__).resolve().parents[3]  # raíz del repositorio
 MODELOS = ["ref_ayer", "ref_semana", "media_historica", "regresion_lineal", "gradient_boosting", "mlp", "lstm"]
 
 args = argparse.ArgumentParser()
@@ -60,9 +64,8 @@ args.add_argument("--folds-cada", type=int, default=3, help="usa uno de cada N f
 args.add_argument("--epocas-lstm", type=int, default=10, help="épocas máximas de la LSTM (para antes si no mejora)")
 args = args.parse_args()
 
-# model_per_station.py lee sus opciones al importarse: se le pasan solo las que comparten los dos scripts
-sys.argv = [sys.argv[0], "--datos", args.datos, "--atributos", args.atributos, "--ventanas", "24", "--semanas", "52"]
-import model_per_station as rna  # noqa: E402  (carga, atributos, folds y métricas: los mismos que la red)
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/
+from bicimadness.comun import datos as D  # noqa: E402  (carga, variables y bloques: los mismos que rna/)
 
 N_VENTANA = 24
 SEMANAS = 52
@@ -70,8 +73,15 @@ RESULTADOS = PROYECTO / args.resultados
 SEMILLA = 0
 
 
+def anotar(filas, errores_hora, config, est, k, real, pred, horas_te):
+    filas.append([config, est, k, mean_absolute_error(real, pred), mean_squared_error(real, pred) ** 0.5,
+                  r2_score(real, pred)])
+    for hora, e in zip(horas_te, np.abs(real - pred)):
+        errores_hora[config, hora].append(e)
+
+
 def ventanas(y, cal, objetivos):
-    """Igual que rna.ventana pero vectorizado: fila t = [y[t-24] ... y[t-1], calendario de t] -> y[t]."""
+    """Igual que D.ventana pero vectorizado: fila t = [y[t-24] ... y[t-1], calendario de t] -> y[t]."""
     sw = sliding_window_view(y, N_VENTANA)  # sw[i] = y[i : i+24]
     return np.hstack([sw[objetivos - N_VENTANA], cal[objetivos]]).astype(np.float32), y[objetivos]
 
@@ -159,7 +169,7 @@ def entrenar_lstm(Xtr, ytr, n_estatico):
 def evaluar_fold(k, s, series, cal, fechas):
     """{modelo: {"pred": {estación: predicción}, "t_entreno": s, "t_pred": s}} de un fold."""
     tr = np.arange(s - SEMANAS * 7 * 24, s)
-    te = np.arange(s, s + rna.TEST_H)
+    te = np.arange(s, s + D.TEST_H)
     out = {}
 
     def apuntar(nombre, entrenar, predecir):
@@ -199,7 +209,7 @@ def evaluar_fold(k, s, series, cal, fechas):
             lambda m: por_est(m.predict))
     if "mlp" in entrenados:
         apuntar("mlp", lambda: make_pipeline(StandardScaler(), MLPRegressor(
-            hidden_layer_sizes=rna.OCULTAS_GLOBAL, early_stopping=True, max_iter=200, random_state=SEMILLA)).fit(Xtr, ytr),
+            hidden_layer_sizes=(64, 32), early_stopping=True, max_iter=200, random_state=SEMILLA)).fit(Xtr, ytr),
             lambda m: por_est(m.predict))
     if "lstm" in entrenados:
         apuntar("lstm", lambda: entrenar_lstm(Xtr, ytr, Xtr.shape[1] - N_VENTANA), lambda f: por_est(f))
@@ -207,13 +217,15 @@ def evaluar_fold(k, s, series, cal, fechas):
 
 
 def main():
-    series, fechas, festivo = rna.cargar()
-    columnas, horas = rna.atributos(fechas, festivo)
-    cal = np.hstack([columnas[a] for a in rna.CONJUNTOS[0]])
-    todos = rna.folds(len(fechas))
+    ruta = D.ruta_datos(args.datos)
+    series, fechas, festivo = D.cargar(ruta)
+    horas = np.array([f.hour for f in fechas])
+    atributos = args.atributos.split(",")
+    cal = D.variables(atributos, fechas, festivo)
+    todos = D.bloques(len(fechas))
     elegidos = todos[::args.folds_cada]
-    print(f"{rna.DATOS.name}: {len(series)} estaciones, {len(fechas)} horas")
-    print(f"atributos: {', '.join(rna.CONJUNTOS[0])}  |  folds: {[k for k, _ in elegidos]} de {len(todos)}")
+    print(f"{ruta.name}: {len(series)} estaciones, {len(fechas)} horas")
+    print(f"atributos: {', '.join(atributos)}  |  folds: {[k for k, _ in elegidos]} de {len(todos)}")
     print(f"modelos: {', '.join(args.modelos)}", flush=True)
 
     carpeta_folds = RESULTADOS / "folds"
@@ -224,16 +236,16 @@ def main():
         hecho = json.loads(fichero.read_text()) if fichero.exists() else {}
         faltan = [m for m in args.modelos if m not in hecho]
         if faltan:
-            print(f"Fold {k} ({fechas[s]:%Y-%m-%d} a {fechas[s + rna.TEST_H - 1]:%Y-%m-%d})", flush=True)
+            print(f"Fold {k} ({fechas[s]:%Y-%m-%d} a {fechas[s + D.TEST_H - 1]:%Y-%m-%d})", flush=True)
             guardar = args.modelos
             args.modelos = faltan
             hecho |= evaluar_fold(k, s, series, cal, fechas)
             args.modelos = guardar
             fichero.write_text(json.dumps(hecho))
-        te = np.arange(s, s + rna.TEST_H)
+        te = np.arange(s, s + D.TEST_H)
         for m in args.modelos:
             for e, y in series.items():
-                rna.anotar(filas, errores_hora, m, e, k, y[te], np.array(hecho[m]["pred"][e]), horas[te])
+                anotar(filas, errores_hora, m, e, k, y[te], np.array(hecho[m]["pred"][e]), horas[te])
             tiempos[m].append((hecho[m]["t_entreno"], hecho[m]["t_pred"]))
 
     escribir(filas, errores_hora, tiempos, list(series))

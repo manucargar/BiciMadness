@@ -68,19 +68,12 @@ If these files are available, you can train without downloading or processing th
 #### 3. Run the main experiment
 
 ```bash
-python src/bicimadness/model_selected60.py
-python src/bicimadness/analyze_groups.py
+python src/bicimadness/rna/entrenar.py
 ```
 
-The first command trains and evaluates a global neural network using the 60 stations, the previous 24 hours of departures, calendar features, and weather. The second summarizes its results by station group.
+With no arguments this trains and evaluates a global neural network on the 60 selected stations (`sel60`), using the previous 24 hours of departures, calendar features, and weather, with 52 weeks of training.
 
-Open `results/selected_60/resumen.csv` for the overall metrics and `results/selected_60/errores_por_grupo.csv` for the group analysis. Training can take tens of minutes, depending on your computer. Output appears in the terminal; there is no browser interface.
-
-For a first check without training neural networks, run only the simple references:
-
-```bash
-python src/bicimadness/compare_models.py --modelos ref_ayer ref_semana media_historica --resultados results/baselines
-```
+Each run is saved in its own dated folder, such as `results/rna/2026-11-19_1530_sel60/`. Open `resumen.csv` for the overall metrics and timing, and `errores_por_grupo.csv` for the group analysis. Training can take tens of minutes, depending on your computer. Output appears in the terminal; there is no browser interface.
 
 ### What the model predicts
 
@@ -111,14 +104,20 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 ├── README.md
 ├── requirements.txt
 ├── src/bicimadness/
-│   ├── preprocess.py          # Raw trips → hourly data for the top 50 stations
-│   ├── count_stations.py      # Raw trips → counts and coordinates for all stations
-│   ├── select_stations.py     # Select 60 stations and write their hourly dataset
-│   ├── weather.py             # Download and prepare hourly Madrid-Retiro weather
-│   ├── model_per_station.py   # MLP experiments; defaults to top 50, one model per station
-│   ├── model_selected60.py    # MLP experiments; defaults to selected 60, one global model
-│   ├── analyze_groups.py      # Summarize station-level metrics by selection group
-│   └── compare_models.py      # Compare references, Ridge, boosting, MLP, and LSTM
+│   ├── preprocesamiento/
+│   │   ├── preprocess.py        # Raw trips → hourly data for the top 50 stations
+│   │   ├── count_stations.py    # Raw trips → counts and coordinates for all stations
+│   │   ├── select_stations.py   # Select 60 stations and write their hourly dataset
+│   │   └── weather.py           # Download and prepare hourly Madrid-Retiro weather
+│   ├── comun/
+│   │   ├── datos.py             # Loading, features, input window, and test blocks (shared)
+│   │   ├── experimento.py       # Runs one study and saves its results (shared)
+│   │   └── comparar.py          # Reads saved runs; paired t-test
+│   ├── rna/
+│   │   └── entrenar.py          # Neural network (MLP): one study per run
+│   ├── comparar_estudios.py     # Compare the studies of one algorithm
+│   ├── comparar_algoritmos.py   # Compare the best study of each algorithm
+│   └── antiguo/                 # Previous all-in-one comparison (Ridge, boosting, LSTM...)
 ├── data/
 │   ├── raw/                   # Original trips, holiday calendar, and weather
 │   ├── processed/             # Hourly datasets and station selection tables
@@ -129,7 +128,7 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 
 Raw trip archives, generated results, intermediate caches, and `.venv/` are excluded by `.gitignore`. The root-level `mempalace.yaml` and `entities.json` are local memory-tool configuration, not inputs to the forecasting pipeline.
 
-The two MLP scripts contain largely duplicated experiment code with different defaults. `compare_models.py` reuses loading, features, folds, and metric helpers from `model_per_station.py`.
+Each algorithm has its own folder (`rna/` now; `lstm/`, `gradient_boosting/`... later) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
 
 ### Data and preprocessing
 
@@ -176,41 +175,44 @@ The top-50 experiment focuses on the busiest stations. The main experiment broad
 | `demanda_baja` | Low demand | Lowest total departures among remaining eligible stations |
 | `centrica` | Central | Nearby stations within 500 m of landmarks such as Sol, Prado, and Atocha |
 | `afueras` | Outlying | Farthest from Puerta del Sol, at least 1 km apart from one another |
-| `facil` | Easier to predict | Highest first-round R² among a random sample of remaining stations |
-| `dificil` | Harder to predict | Lowest first-round R² in that sample |
+| `facil` | Easier to predict | Highest first-round R² among all remaining eligible stations |
+| `dificil` | Harder to predict | Lowest first-round R² among those stations |
 
 Eligibility requires at least **30 departures in every month** of the input period. The project notes report 240 eligible stations out of 294 across 26 months for the original dataset.
 
-Groups are filled in the order above, without reusing stations. For the difficulty groups, the script samples 60 remaining candidates with random seed `42`, runs a global calendar-only MLP, and ranks stations by R². Station coordinates are estimated from median trip unlock GPS positions.
+Groups are filled in the order above, without reusing stations. For the difficulty groups, the script runs one MLP per station with all features over all remaining candidates (`--modo global` for one shared network) and ranks stations by R², computed **only on test blocks starting before 2022-08-01** (`CORTE_GRUPOS` in `comun/datos.py`). `errores_por_grupo.csv` then also reports each group on the later blocks, which were not used to choose the groups. `--muestra 60` uses a random sample (seed `42`) instead, which is faster. Station coordinates are estimated from median trip unlock GPS positions.
 
 The selection table, `estaciones_seleccionadas.csv`, records station names, groups, reasons, total and mean departures, distance from Sol, coordinates, and first-round R² where available. Selection depends on the supplied data; fixed seeds do not guarantee identical numerical results across all dependency versions and hardware.
 
 ### Models and features
 
-#### MLP experiments
+#### Neural network studies (`rna/entrenar.py`)
 
-**MLP** means multilayer perceptron: a neural network with fully connected layers.
+**MLP** means multilayer perceptron: a neural network with fully connected layers. `rna` abbreviates the Spanish *red neuronal artificial*. Each run is one **study**: one concrete configuration.
 
-| Setting | `model_per_station.py` default | `model_selected60.py` default |
+| Option | Default | Meaning |
 |---|---|---|
-| Dataset | Top 50 stations | Selected 60 stations |
-| Training approach | One network per station | One shared global network |
-| Previous hours used | 24 | 24 |
-| Training history | 52 weeks | 52 weeks |
-| Features | Calendar | Calendar + weather |
-| Hidden layers | 32, 16 for station models | 64, 32 for global models |
-| Global fold workers (`--jobs`) | 4 | 2 |
-| Output directory | `results/per_station/` | `results/selected_60/` |
+| `datos` (positional) | `sel60` | `sel60`, `top50`, or the path of any CSV with the same columns |
+| `--modo` | `global` | `global` = one network for all stations; `estacion` = one network per station |
+| `--variables` | `todas` | Comma-separated features, `todas` (all), or `ninguna` (history only) |
+| `--meteo` | `actual` | `actual` = weather of the predicted hour (a perfect forecast); `anterior` = previous hour's weather |
+| `--ventana` | 24 | Previous hours used (1–168) |
+| `--semanas` | 52 | Training weeks per block (1–52) |
+| `--nombre` | CSV name | Study name; repeated names get `_1`, `_2`... |
+| `--ocultas` | 64 32 global / 32 16 station | Hidden-layer sizes |
+| `--iteraciones` | 200 global / 500 station | Maximum epochs |
+| `--jobs` | 2 global / all cores station | Blocks trained in parallel |
+| `--hasta` | — | Only test blocks starting before this date |
 
-Both scripts support both training approaches. A **station model** learns from one station's observations. A **global model** learns from all selected stations and receives the station ID as a one-hot feature.
+A **station model** learns from one station's observations. A **global model** learns from all selected stations and receives the station ID as a one-hot feature.
 
 One-hot encoding represents a category as separate 0/1 columns: for example, hour of day uses 24 columns. Calendar features include hour, weekday, month, and holiday status; optional numerical features are temperature and precipitation.
 
-MLPs use `StandardScaler` fitted on each training fold, early stopping, and random seed `0`. Station networks allow up to 500 iterations; global networks allow up to 200. Early stopping can finish training sooner.
+Inputs are standardized with the mean and deviation of each training block, and networks use early stopping and seed `0` (`--semilla`). Early stopping can finish training sooner.
 
-#### Algorithm comparison
+#### Previous algorithm comparison (`antiguo/`)
 
-`compare_models.py` evaluates these model names:
+Until each algorithm has its own folder, `antiguo/compare_models.py` keeps the earlier all-in-one comparison. Its outputs use the old format and are not read by `comparar_algoritmos.py`. It evaluates these model names:
 
 | CLI name | What it does |
 |---|---|
@@ -233,87 +235,49 @@ The outer evaluation respects time order using a **sliding window**:
 3. Move the test start forward by two weeks.
 4. Retrain using the history immediately before the new test period.
 
-Each train/test split is called a **fold**. When an MLP command compares several input windows or training durations, all configurations share the same test periods, starting late enough for the largest requested history.
+Each train/test split is called a **fold** or block. The first block always starts at the same hour (leaving room for the longest allowed window, 1 week, and training history, 52 weeks), so **every run on the same CSV uses the same 29 blocks** and runs can be compared with a paired t-test.
 
 Within a test period, predictions use the actual observations preceding each target hour, including earlier observations from that test period. This evaluates repeated one-hour-ahead predictions with newly available observations; it does not predict an entire two-week block in advance.
 
-`compare_models.py` uses every third fold by default (`--folds-cada 3`). Use `--folds-cada 1` for all folds. The original prepared dataset yields 29 full folds under the default history and window, of which 10 are used by the default comparison.
+`antiguo/compare_models.py` uses every third fold by default (`--folds-cada 3`). Use `--folds-cada 1` for all folds.
 
 Internal early-stopping validation is separate from this outer evaluation. MLP early stopping and the LSTM's validation use random subsets of training observations, rather than a final chronological validation segment.
 
 ### Running experiments
 
-#### Explore the earlier top-50 experiment
+#### One study per run
 
 ```bash
-python src/bicimadness/model_per_station.py
-python src/bicimadness/model_per_station.py --ventanas 24 48 --semanas 26 52 --resultados results/top50_windows
+python src/bicimadness/rna/entrenar.py                       # sel60, global, all features
+python src/bicimadness/rna/entrenar.py top50                 # top-50 stations
+python src/bicimadness/rna/entrenar.py sel60 --modo estacion # one network per station
+python src/bicimadness/rna/entrenar.py sel60 --variables hora,dia_semana,mes,festivo --nombre sel60_calendario
+python src/bicimadness/rna/entrenar.py sel60 --meteo anterior
+python src/bicimadness/rna/entrenar.py sel60 --ventana 48 --semanas 26
 ```
 
-The second command evaluates every combination: two windows × two training histories.
-
-#### Compare station and global networks
+Each run creates `results/rna/<date>_<name>/`; earlier runs are never overwritten. For the full list of options:
 
 ```bash
-python src/bicimadness/model_selected60.py --modelo estacion global --resultados results/sel60_architectures
+python src/bicimadness/rna/entrenar.py --help
 ```
 
-#### Measure the contribution of weather
-
-Pass comma-separated feature names without spaces inside each set:
+#### Compare the studies of one algorithm
 
 ```bash
-python src/bicimadness/model_selected60.py --atributos hora,dia_semana,mes,festivo hora,dia_semana,mes,festivo,temperatura,precipitacion --resultados results/sel60_weather_comparison
-python src/bicimadness/analyze_groups.py --resultados results/sel60_weather_comparison
+python src/bicimadness/comparar_estudios.py rna
+python src/bicimadness/comparar_estudios.py rna --datos sel60
 ```
+
+For each CSV, ranks the runs by MAE and runs a paired t-test of each against the best. `p_vs_mejor >= 0.05` means it is not significantly different from the best (`equivalente_a_la_mejor = sí`). Writes `results/rna/comparacion_estudios.csv`.
 
 #### Compare algorithms
 
 ```bash
-# All seven algorithms, every third fold
-python src/bicimadness/compare_models.py
-
-# All seven algorithms, all folds
-python src/bicimadness/compare_models.py --folds-cada 1 --resultados results/comparison_all_folds
-
-# Selected algorithms, without the LSTM
-python src/bicimadness/compare_models.py --modelos ref_ayer gradient_boosting mlp --resultados results/comparison_subset
+python src/bicimadness/comparar_algoritmos.py
 ```
 
-#### MLP command options
-
-These options apply to both `model_per_station.py` and `model_selected60.py`:
-
-| Option | Purpose | Example |
-|---|---|---|
-| `--modelo` | Station, global, or both | `--modelo estacion global` |
-| `--ventanas` | One or more input-window lengths in hours | `--ventanas 24 48` |
-| `--semanas` | One or more training histories in weeks | `--semanas 26 52` |
-| `--atributos` | One or more comma-separated feature sets | `--atributos hora,dia_semana,mes,festivo` |
-| `--datos` | Input hourly CSV | `--datos data/processed/salidas_por_hora_sel60.csv` |
-| `--resultados` | Output directory | `--resultados results/my_experiment` |
-| `--ocultas-global` | Global network hidden-layer sizes | `--ocultas-global 64 32` |
-| `--jobs` | Number of parallel global folds | `--jobs 1` |
-
-Relative data/output paths for these commands are resolved from the project root. `--jobs` controls global-fold parallelism; station-level evaluation separately uses all available Joblib workers.
-
-The comparison script has its own options: `--datos`, `--resultados`, a single `--atributos` set, `--modelos`, `--folds-cada`, and `--epocas-lstm`. It does not accept the MLP window or training-week options.
-
-For the exact command-line interface:
-
-```bash
-python src/bicimadness/model_selected60.py --help
-python src/bicimadness/compare_models.py --help
-python src/bicimadness/analyze_groups.py --help
-```
-
-#### Output reuse and experiment isolation
-
-MLP scripts regenerate the CSV reports in their output directory on each run. Use a distinct `--resultados` directory to retain an earlier experiment.
-
-The comparison script saves predictions and timing in `folds/fold_XX.json`, and resumes missing models/folds when rerun. **Its cache is keyed by fold and model name, not by dataset, feature set, or hyperparameters.** Use a new results directory when changing these inputs, LSTM epochs, or model code, to avoid reusing incompatible predictions. Resuming the same experiment or extending it to all folds can reuse its existing cache.
-
-The station-selection first round also reuses results when the sampled station IDs match. Use `select_stations.py --repetir` after changing its inputs or modeling logic.
+For each CSV, takes the lowest-MAE run from every algorithm folder in `results/`, adds the "same hour yesterday" reference, and compares MAE, RMSE, R², and time, with pairwise t-tests. Writes `results/comparacion_algoritmos.csv` and `results/comparacion_algoritmos_ttest.csv`.
 
 ### Understanding the results
 
@@ -323,32 +287,24 @@ The station-selection first round also reuses results when the sampled station I
 - **RMSE (root mean squared error):** also measured in departures, but penalizes large misses more strongly. Lower is better.
 - **R²:** measures fit relative to predicting the mean of the evaluated target values. Higher is better; 1 is perfect, 0 matches that mean-based benchmark, and negative values are possible. It is not percentage accuracy.
 
-`resumen.csv` averages metrics across station–fold pairs. In particular, its RMSE and R² are averages of individual scores, not scores recomputed from all pooled predictions. Stations receive equal weight in this summary, regardless of trip volume.
+`resumen.csv` averages metrics across station–block pairs. In particular, its RMSE and R² are averages of individual scores, not scores recomputed from all pooled predictions. Stations receive equal weight in this summary, regardless of trip volume.
 
 #### Generated files
 
+Each run folder `results/<algorithm>/<date>_<name>/` contains:
+
 | File | What to use it for |
 |---|---|
-| `resumen.csv` | Overall MAE, RMSE, and R² by configuration |
-| `resultados_folds.csv` | Detailed metrics for each configuration, station, and fold |
-| `ttest.csv` | Pairwise statistical comparisons of station–fold MAE |
+| `config.json` | Every option, dates, git commit, and Python version: exactly what was run |
+| `resumen.csv` | Overall MAE, RMSE, R², the same for the "same hour yesterday" reference, and timing |
+| `resultados_folds.csv` | Metrics for each station and block |
+| `tiempos.csv` | Training and prediction seconds for each block |
+| `error_por_estacion.csv` | Metrics averaged across blocks for each station |
 | `error_por_hora.csv` | MAE and RMSE by hour of day |
-| `error_por_estacion.csv` | Metrics averaged across folds for each station |
-| `errores_por_grupo.csv` | Group averages, produced by `analyze_groups.py` |
-| `tiempos.csv` | Training/prediction timing summaries, produced by `compare_models.py` |
-| `folds/fold_XX.json` | Cached comparison predictions and timings |
+| `errores_por_grupo.csv` | Group averages for all blocks and for blocks from 2022-08-01 (only for CSVs with groups, such as `sel60`) |
+| `predicciones.csv.gz` | Date, station, block, observed value, and prediction |
 
-A configuration name such as `rna_global_24h_52sem` means a global neural network, 24 hours of input, and 52 weeks of training. `rna` abbreviates the Spanish *red neuronal artificial*. If multiple feature sets are compared, their names are appended. The MLP scripts call their previous-day baseline `referencia_24h`; the comparison script calls it `ref_ayer`.
-
-The paired t-test compares MAE for matching station–fold pairs. In `ttest.csv`, a negative `t` means `config_a` has lower mean MAE than `config_b`. A small p-value is evidence under the test's assumptions, not proof of practical importance: station/time dependence and multiple comparisons limit the interpretation.
-
-A useful reading order is `resumen.csv` → `error_por_estacion.csv` / `error_por_hora.csv` → `errores_por_grupo.csv` → `ttest.csv`. Check fold coverage and feature choices before comparing results from different directories.
-
-`analyze_groups.py` defaults to `results/selected_60/` and the selected-60 station table. To analyze the algorithm comparison:
-
-```bash
-python src/bicimadness/analyze_groups.py --resultados results/model_comparison
-```
+The paired t-test compares MAE for matching station–block pairs. A small p-value is evidence under the test's assumptions, not proof of practical importance: station/time dependence and multiple comparisons limit the interpretation.
 
 ### Rebuilding the datasets
 
@@ -372,7 +328,7 @@ Keep `data/raw/calendario_laboral.csv` available. Ensure `data/processed/` exist
 #### Top-50 dataset
 
 ```bash
-python src/bicimadness/preprocess.py
+python src/bicimadness/preprocesamiento/preprocess.py
 ```
 
 Writes `data/processed/salidas_por_hora_top50.csv` and `data/processed/estaciones_top50.csv`.
@@ -380,25 +336,27 @@ Writes `data/processed/salidas_por_hora_top50.csv` and `data/processed/estacione
 #### Selected-60 dataset
 
 ```bash
-python src/bicimadness/count_stations.py
-python src/bicimadness/select_stations.py
+python src/bicimadness/preprocesamiento/count_stations.py
+python src/bicimadness/preprocesamiento/select_stations.py
 ```
 
 The first command generates all-station counts and location information in `data/cache/`. The second performs selection, training the first-round model if needed, and writes:
 
 - `data/processed/estaciones_seleccionadas.csv`
 - `data/processed/salidas_por_hora_sel60.csv`
-- `results/first_round/` reports and, when regenerated, `data/processed/salidas_por_hora_muestra.csv`
+- `results/primera_ronda/` reports and `data/cache/salidas_por_hora_primera_ronda.csv`
+
+The first round trains one network per station for about 200 stations (around 10–20 minutes on 8 cores). A global network over that many stations (`--modo global`) does not fit in 8 GB of RAM.
 
 #### Weather
 
 ```bash
-python src/bicimadness/weather.py
+python src/bicimadness/preprocesamiento/weather.py
 ```
 
 Downloads annual compressed weather files to `data/raw/meteo/` if absent, then writes `data/raw/meteo_horario.csv`. Internet access is required for missing downloads. The weather script covers January 2021 through February 2023, extending past the final trip timestamp.
 
-After rebuilding, run the main experiment and group analysis from the quick start.
+After rebuilding, run the main experiment from the quick start.
 
 ### Troubleshooting
 
@@ -407,17 +365,16 @@ After rebuilding, run the main experiment and group analysis from the quick star
 | `ModuleNotFoundError` | Activate `.venv` and install dependencies using that environment's `python -m pip`. In PyCharm, select the same virtual-environment interpreter. |
 | Missing hourly CSV | Verify `data/processed/`; regenerate the relevant dataset if necessary. |
 | Missing weather file or weather timestamp `KeyError` | Generate `meteo_horario.csv` and verify that it covers every target timestamp. Custom date ranges require matching weather data. |
-| Missing `error_por_estacion.csv` during group analysis | Run the model first, or pass `--resultados` pointing to an existing run. |
-| Memory pressure during global training | Use `--jobs 1`. This reduces simultaneous global folds; it does not change station-level parallelism. |
+| Memory pressure during global training | Use `--jobs 1`. This reduces the number of blocks trained at the same time. |
 | Slow comparison | Begin with a subset of `--modelos` or increase `--folds-cada`; include all folds for the final comparison. |
-| Results seem unchanged after changing comparison settings | Use a fresh `--resultados` directory; cached folds do not validate the experiment settings. |
+| Old comparison results seem unchanged after changing its settings | `antiguo/compare_models.py` caches folds: use a fresh `--resultados` directory. |
 | No test folds for a custom dataset | Provide enough history for the largest input window, training period, and a full 336-hour test block. |
 | `ConvergenceWarning` | The optimizer reached its iteration limit. Review the affected experiment before relying on its results; CLI hidden-layer settings do not adjust that limit. |
 
 ### Limitations and future work
 
-- **Observed target-hour weather:** evaluation uses actual weather for the predicted hour. An operational forecast would need weather forecasts or features available at prediction time; current weather-based results may be optimistic.
-- **Station-selection bias:** demand/availability selection uses the dataset period, and easy/difficult groups use first-round scores from the same period later evaluated. These group comparisons are exploratory, not an untouched holdout evaluation.
+- **Target-hour weather:** with `--meteo actual` (default) the model uses the observed weather of the predicted hour, which stands for a perfect one-hour-ahead forecast. `--meteo anterior` uses only the previous hour's weather; the difference between both measures the value of a good forecast.
+- **Station-selection bias:** easy/difficult groups are chosen with blocks before 2022-08-01; only the `desde_2022-08-01` rows of `errores_por_grupo.csv` evaluate them on unused weeks. The best configuration is chosen and reported on the same 29 blocks, so its error can be slightly optimistic.
 - **Dependent observations:** station–fold errors are not fully independent; interpret t-test p-values cautiously.
 - **Historical coverage:** the prepared trips end in February 2023. Performance on today's network has not been established by these experiments.
 - **Demand versus observed departures:** recorded trips reflect actual usage and available bicycles; they do not directly measure unmet demand at empty stations.
@@ -432,7 +389,7 @@ The project notes propose exploratory charts and maps, event features such as ma
 - [Progress notes for 20 November](docs/seguimiento_20nov.md) — Spanish project context and preliminary findings; check the actual run configuration before citing results.
 - [Proposed final report outline](docs/indice_memoria.md)
 
-To understand the implementation, start with `preprocess.py`, then read `ventana()`, `folds()`, `evaluar_estacion()`, and `evaluar_global()` in `model_per_station.py`. Continue with `select_stations.py`, the defaults in `model_selected60.py`, and finally `compare_models.py` and `analyze_groups.py`.
+To understand the implementation, start with `preprocesamiento/preprocess.py`, then read `ventana()` and `bloques()` in `comun/datos.py`, `_bloque()` and `guardar()` in `comun/experimento.py`, and `entrenar()` in `rna/entrenar.py`. Continue with `preprocesamiento/select_stations.py` and the two comparison scripts.
 
 ---
 
@@ -504,19 +461,12 @@ Con estos archivos puedes entrenar sin descargar ni procesar de nuevo los viajes
 #### 3. Ejecutar el experimento principal
 
 ```bash
-python src/bicimadness/model_selected60.py
-python src/bicimadness/analyze_groups.py
+python src/bicimadness/rna/entrenar.py
 ```
 
-El primer comando entrena y evalúa una red global con las 60 estaciones, las salidas de las últimas 24 horas, el calendario y la meteorología. El segundo resume los resultados por grupo de estaciones.
+Sin argumentos, entrena y evalúa una red global con las 60 estaciones seleccionadas (`sel60`), las salidas de las últimas 24 horas, el calendario y la meteorología, con 52 semanas de entrenamiento.
 
-Abre `results/selected_60/resumen.csv` para consultar las métricas generales y `results/selected_60/errores_por_grupo.csv` para el análisis por grupos. El entrenamiento puede tardar decenas de minutos, según el ordenador. Los mensajes aparecen en la terminal; no hay interfaz en el navegador.
-
-Para una primera comprobación sin entrenar redes neuronales, ejecuta solo las referencias sencillas:
-
-```bash
-python src/bicimadness/compare_models.py --modelos ref_ayer ref_semana media_historica --resultados results/baselines
-```
+Cada ejecución se guarda en su propia carpeta con fecha, por ejemplo `results/rna/2026-11-19_1530_sel60/`. Abre `resumen.csv` para consultar las métricas generales y los tiempos, y `errores_por_grupo.csv` para el análisis por grupos. El entrenamiento puede tardar decenas de minutos, según el ordenador. Los mensajes aparecen en la terminal; no hay interfaz en el navegador.
 
 ### Qué predice el modelo
 
@@ -545,14 +495,20 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 ├── README.md
 ├── requirements.txt
 ├── src/bicimadness/
-│   ├── preprocess.py          # Viajes originales → datos horarios de las top 50
-│   ├── count_stations.py      # Viajes → recuentos y coordenadas de todas las estaciones
-│   ├── select_stations.py     # Selección de 60 estaciones y generación de su CSV horario
-│   ├── weather.py             # Descarga y preparación de meteorología de Madrid-Retiro
-│   ├── model_per_station.py   # MLP: por defecto, top 50 y una red por estación
-│   ├── model_selected60.py    # MLP: por defecto, 60 seleccionadas y una red global
-│   ├── analyze_groups.py      # Resumen de métricas por grupo de estaciones
-│   └── compare_models.py      # Referencias, Ridge, boosting, MLP y LSTM
+│   ├── preprocesamiento/
+│   │   ├── preprocess.py        # Viajes originales → datos horarios de las top 50
+│   │   ├── count_stations.py    # Viajes → recuentos y coordenadas de todas las estaciones
+│   │   ├── select_stations.py   # Selección de 60 estaciones y generación de su CSV horario
+│   │   └── weather.py           # Descarga y preparación de meteorología de Madrid-Retiro
+│   ├── comun/
+│   │   ├── datos.py             # Carga, variables, ventana y bloques de test (compartido)
+│   │   ├── experimento.py       # Ejecuta un estudio y guarda sus resultados (compartido)
+│   │   └── comparar.py          # Lectura de ejecuciones guardadas y t-test pareado
+│   ├── rna/
+│   │   └── entrenar.py          # Red neuronal (MLP): un estudio por ejecución
+│   ├── comparar_estudios.py     # Compara los estudios de un algoritmo
+│   ├── comparar_algoritmos.py   # Compara el mejor estudio de cada algoritmo
+│   └── antiguo/                 # Comparación anterior todo-en-uno (Ridge, boosting, LSTM...)
 ├── data/
 │   ├── raw/                   # Viajes originales, calendario y meteorología
 │   ├── processed/             # Series horarias y tablas de estaciones
@@ -563,7 +519,7 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 
 `.gitignore` excluye los archivos originales de viajes, los resultados generados, las cachés intermedias y `.venv/`. Los archivos raíz `mempalace.yaml` y `entities.json` son configuración de una herramienta de memoria local; no intervienen en la predicción.
 
-Los dos scripts de MLP contienen código de experimentación en gran parte duplicado, con distintos valores por defecto. `compare_models.py` reutiliza funciones de carga, atributos, particiones y métricas de `model_per_station.py`.
+Cada algoritmo tiene su carpeta (`rna/` ahora; más adelante `lstm/`, `gradient_boosting/`...) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
 
 ### Datos y preprocesado
 
@@ -610,41 +566,44 @@ El experimento de las top 50 se centra en las estaciones con más actividad. El 
 | `demanda_baja` | Demanda baja | Menor número de salidas entre las candidatas restantes |
 | `centrica` | Céntrica | Estaciones a menos de 500 m de lugares como Sol, Prado y Atocha |
 | `afueras` | Afueras | Las más alejadas de Sol, separadas al menos 1 km entre sí |
-| `facil` | Más fácil de predecir | Mayor R² en una primera ronda sobre una muestra aleatoria de candidatas restantes |
-| `dificil` | Más difícil de predecir | Menor R² en esa muestra |
+| `facil` | Más fácil de predecir | Mayor R² en una primera ronda sobre todas las candidatas restantes |
+| `dificil` | Más difícil de predecir | Menor R² en esa primera ronda |
 
 Para ser candidata, una estación debe tener al menos **30 salidas en cada mes** del periodo. Las notas del proyecto indican que, en los datos originales, cumplen el criterio 240 de las 294 estaciones durante 26 meses.
 
-Los grupos se completan en el orden de la tabla, sin repetir estaciones. Para los grupos de dificultad, se sortean 60 candidatas restantes con semilla `42`, se entrena una MLP global solo con calendario y se ordenan las estaciones por R². Las coordenadas se estiman mediante la mediana de las posiciones GPS de desbloqueo.
+Los grupos se completan en el orden de la tabla, sin repetir estaciones. Para los grupos de dificultad se entrena una MLP por estación con todas las variables sobre todas las candidatas restantes (`--modo global` para una red compartida) y se ordenan las estaciones por R², calculado **solo con los bloques de test que empiezan antes del 2022-08-01** (`CORTE_GRUPOS` en `comun/datos.py`). Después, `errores_por_grupo.csv` da también el error de cada grupo en los bloques posteriores, que no se usaron para elegir los grupos. Con `--muestra 60` se usa una muestra aleatoria (semilla `42`), más rápida. Las coordenadas se estiman mediante la mediana de las posiciones GPS de desbloqueo.
 
 `estaciones_seleccionadas.csv` recoge nombres, grupos, motivos, salidas totales y medias, distancia a Sol, coordenadas y R² de primera ronda cuando existe. La selección depende de los datos; fijar semillas no garantiza resultados numéricos idénticos con cualquier versión de dependencias y hardware.
 
 ### Modelos y atributos
 
-#### Experimentos MLP
+#### Estudios de red neuronal (`rna/entrenar.py`)
 
-**MLP** significa perceptrón multicapa: una red neuronal con capas completamente conectadas.
+**MLP** significa perceptrón multicapa: una red neuronal con capas completamente conectadas. `rna` abrevia *red neuronal artificial*. Cada ejecución es un **estudio**: una configuración concreta.
 
-| Configuración | Por defecto en `model_per_station.py` | Por defecto en `model_selected60.py` |
+| Opción | Por defecto | Significado |
 |---|---|---|
-| Datos | Top 50 estaciones | 60 estaciones seleccionadas |
-| Entrenamiento | Una red por estación | Una red global compartida |
-| Horas anteriores utilizadas | 24 | 24 |
-| Historial de entrenamiento | 52 semanas | 52 semanas |
-| Atributos | Calendario | Calendario + meteorología |
-| Capas ocultas | 32 y 16, para redes por estación | 64 y 32, para redes globales |
-| Procesos de folds globales (`--jobs`) | 4 | 2 |
-| Carpeta de resultados | `results/per_station/` | `results/selected_60/` |
+| `datos` (posicional) | `sel60` | `sel60`, `top50` o la ruta de cualquier CSV con las mismas columnas |
+| `--modo` | `global` | `global` = una red para todas las estaciones; `estacion` = una red por estación |
+| `--variables` | `todas` | Variables separadas por comas, `todas` o `ninguna` (solo el historial) |
+| `--meteo` | `actual` | `actual` = meteorología de la hora que se predice (pronóstico perfecto); `anterior` = la de la hora anterior |
+| `--ventana` | 24 | Horas anteriores utilizadas (1–168) |
+| `--semanas` | 52 | Semanas de entrenamiento en cada bloque (1–52) |
+| `--nombre` | nombre del CSV | Nombre del estudio; si se repite se añade `_1`, `_2`... |
+| `--ocultas` | 64 32 global / 32 16 por estación | Neuronas de cada capa oculta |
+| `--iteraciones` | 200 global / 500 por estación | Épocas máximas |
+| `--jobs` | 2 global / todos los núcleos por estación | Bloques entrenados en paralelo |
+| `--hasta` | — | Solo los bloques de test que empiezan antes de esa fecha |
 
-Ambos scripts permiten los dos enfoques. Un **modelo por estación** aprende de las observaciones de una sola estación. Un **modelo global** aprende de todas las estaciones seleccionadas y recibe el identificador de estación mediante codificación one-hot.
+Un **modelo por estación** aprende de las observaciones de una sola estación. Un **modelo global** aprende de todas las estaciones seleccionadas y recibe el identificador de estación mediante codificación one-hot.
 
 La codificación **one-hot** representa cada categoría en columnas de ceros y unos; por ejemplo, la hora del día ocupa 24 columnas. Los atributos de calendario son hora, día de la semana, mes y festivo. Temperatura y precipitación son atributos numéricos opcionales.
 
-Las MLP utilizan `StandardScaler`, ajustado con los datos de entrenamiento de cada fold, parada temprana y semilla `0`. Las redes por estación admiten hasta 500 iteraciones y las globales hasta 200; la parada temprana puede finalizar antes.
+Las entradas se estandarizan con la media y la desviación del entrenamiento de cada bloque; las redes usan parada temprana y semilla `0` (`--semilla`). La parada temprana puede finalizar antes.
 
-#### Comparación de algoritmos
+#### Comparación anterior de algoritmos (`antiguo/`)
 
-`compare_models.py` acepta estos nombres:
+Hasta que cada algoritmo tenga su carpeta, `antiguo/compare_models.py` mantiene la comparación anterior todo-en-uno. Sus resultados usan el formato antiguo y `comparar_algoritmos.py` no los lee. Acepta estos nombres:
 
 | Nombre en el comando | Funcionamiento |
 |---|---|
@@ -667,87 +626,49 @@ La evaluación externa respeta el orden temporal mediante una **ventana deslizan
 3. Desplazar el inicio del test dos semanas.
 4. Volver a entrenar con el historial inmediatamente anterior al nuevo periodo de test.
 
-Cada partición de entrenamiento y test se denomina **fold**. Cuando un comando MLP compara varias ventanas o duraciones de entrenamiento, todas las configuraciones utilizan los mismos periodos de test, empezando lo bastante tarde para disponer del historial máximo solicitado.
+Cada partición de entrenamiento y test se denomina **fold** o bloque. El primer bloque empieza siempre en la misma hora (deja sitio a la ventana y al entrenamiento más largos permitidos: 1 semana y 52 semanas), así que **todas las ejecuciones sobre un mismo CSV usan los mismos 29 bloques** y se pueden comparar con un t-test pareado.
 
 Dentro del test, cada predicción utiliza las observaciones reales anteriores a su hora objetivo, incluidas las de horas anteriores del mismo periodo de test. Por tanto, se evalúan predicciones sucesivas a una hora con observaciones actualizadas; no se predicen dos semanas completas desde el comienzo del bloque.
 
-`compare_models.py` utiliza por defecto uno de cada tres folds (`--folds-cada 3`). Para utilizarlos todos, indica `--folds-cada 1`. Con los datos originales y los valores por defecto hay 29 folds completos; la comparación predeterminada utiliza 10.
+`antiguo/compare_models.py` utiliza por defecto uno de cada tres folds (`--folds-cada 3`). Para utilizarlos todos, indica `--folds-cada 1`.
 
 La validación interna para la parada temprana es distinta de la evaluación externa. La MLP y la LSTM utilizan subconjuntos aleatorios de las observaciones de entrenamiento, en lugar de reservar el último segmento cronológico para esa validación interna.
 
 ### Ejecutar experimentos
 
-#### Explorar el experimento de las top 50
+#### Un estudio por ejecución
 
 ```bash
-python src/bicimadness/model_per_station.py
-python src/bicimadness/model_per_station.py --ventanas 24 48 --semanas 26 52 --resultados results/top50_windows
+python src/bicimadness/rna/entrenar.py                       # sel60, global, todas las variables
+python src/bicimadness/rna/entrenar.py top50                 # las 50 estaciones con más salidas
+python src/bicimadness/rna/entrenar.py sel60 --modo estacion # una red por estación
+python src/bicimadness/rna/entrenar.py sel60 --variables hora,dia_semana,mes,festivo --nombre sel60_calendario
+python src/bicimadness/rna/entrenar.py sel60 --meteo anterior
+python src/bicimadness/rna/entrenar.py sel60 --ventana 48 --semanas 26
 ```
 
-El segundo comando evalúa todas las combinaciones: dos ventanas × dos historiales de entrenamiento.
-
-#### Comparar redes por estación y globales
+Cada ejecución crea `results/rna/<fecha>_<nombre>/`; nunca se sobrescriben las anteriores. Para ver todas las opciones:
 
 ```bash
-python src/bicimadness/model_selected60.py --modelo estacion global --resultados results/sel60_architectures
+python src/bicimadness/rna/entrenar.py --help
 ```
 
-#### Medir la aportación de la meteorología
-
-Escribe los atributos separados por comas, sin espacios dentro de cada conjunto:
+#### Comparar los estudios de un algoritmo
 
 ```bash
-python src/bicimadness/model_selected60.py --atributos hora,dia_semana,mes,festivo hora,dia_semana,mes,festivo,temperatura,precipitacion --resultados results/sel60_weather_comparison
-python src/bicimadness/analyze_groups.py --resultados results/sel60_weather_comparison
+python src/bicimadness/comparar_estudios.py rna
+python src/bicimadness/comparar_estudios.py rna --datos sel60
 ```
+
+Para cada CSV, ordena las ejecuciones por MAE y hace un t-test pareado de cada una contra la mejor. `p_vs_mejor >= 0.05` significa que no es significativamente distinta de la mejor (`equivalente_a_la_mejor = sí`). Genera `results/rna/comparacion_estudios.csv`.
 
 #### Comparar algoritmos
 
 ```bash
-# Los siete algoritmos, uno de cada tres folds
-python src/bicimadness/compare_models.py
-
-# Los siete algoritmos, todos los folds
-python src/bicimadness/compare_models.py --folds-cada 1 --resultados results/comparison_all_folds
-
-# Solo algunos algoritmos, sin LSTM
-python src/bicimadness/compare_models.py --modelos ref_ayer gradient_boosting mlp --resultados results/comparison_subset
+python src/bicimadness/comparar_algoritmos.py
 ```
 
-#### Opciones de los comandos MLP
-
-Estas opciones se aplican tanto a `model_per_station.py` como a `model_selected60.py`:
-
-| Opción | Utilidad | Ejemplo |
-|---|---|---|
-| `--modelo` | Por estación, global o ambos | `--modelo estacion global` |
-| `--ventanas` | Una o varias ventanas de entrada, en horas | `--ventanas 24 48` |
-| `--semanas` | Uno o varios historiales de entrenamiento, en semanas | `--semanas 26 52` |
-| `--atributos` | Uno o varios conjuntos de atributos separados por comas | `--atributos hora,dia_semana,mes,festivo` |
-| `--datos` | CSV horario de entrada | `--datos data/processed/salidas_por_hora_sel60.csv` |
-| `--resultados` | Carpeta de salida | `--resultados results/my_experiment` |
-| `--ocultas-global` | Tamaños de las capas ocultas de la red global | `--ocultas-global 64 32` |
-| `--jobs` | Número de folds globales ejecutados en paralelo | `--jobs 1` |
-
-Las rutas relativas de datos y resultados se resuelven desde la raíz del proyecto. `--jobs` controla el paralelismo de los folds globales; la evaluación por estación utiliza por separado todos los procesos disponibles mediante Joblib.
-
-El comparador tiene sus propias opciones: `--datos`, `--resultados`, un solo conjunto `--atributos`, `--modelos`, `--folds-cada` y `--epocas-lstm`. No admite las opciones MLP de ventana ni semanas de entrenamiento.
-
-Para consultar la interfaz exacta:
-
-```bash
-python src/bicimadness/model_selected60.py --help
-python src/bicimadness/compare_models.py --help
-python src/bicimadness/analyze_groups.py --help
-```
-
-#### Reutilización de resultados y separación de experimentos
-
-Los scripts MLP regeneran los informes CSV de su carpeta en cada ejecución. Utiliza una carpeta `--resultados` distinta para conservar un experimento anterior.
-
-El comparador guarda predicciones y tiempos en `folds/fold_XX.json` y, al ejecutarlo de nuevo, completa los modelos o folds pendientes. **La caché identifica el fold y el nombre del modelo, pero no los datos, los atributos ni los hiperparámetros.** Usa una carpeta nueva si cambias esos elementos, las épocas de la LSTM o el código del modelo, para evitar reutilizar predicciones incompatibles. Puedes reutilizar la caché para reanudar el mismo experimento o ampliarlo a todos los folds.
-
-La primera ronda de selección también reutiliza resultados si coinciden los identificadores de las estaciones muestreadas. Ejecuta `select_stations.py --repetir` si cambias sus datos o su lógica de modelado.
+Para cada CSV, coge la ejecución con menor MAE de cada carpeta de algoritmo de `results/`, añade la referencia "misma hora de ayer" y compara MAE, RMSE, R² y tiempo, con t-test por pares. Genera `results/comparacion_algoritmos.csv` y `results/comparacion_algoritmos_ttest.csv`.
 
 ### Interpretar los resultados
 
@@ -757,32 +678,24 @@ La primera ronda de selección también reutiliza resultados si coinciden los id
 - **RMSE, raíz del error cuadrático medio:** también se mide en salidas, pero penaliza más los errores grandes. Cuanto menor, mejor.
 - **R²:** mide el ajuste respecto a predecir la media de los valores objetivo evaluados. Cuanto mayor, mejor: 1 es perfecto, 0 iguala esa referencia basada en la media y puede ser negativo. No es un porcentaje de acierto.
 
-`resumen.csv` promedia las métricas de los pares estación–fold. En particular, RMSE y R² son medias de puntuaciones individuales, no métricas recalculadas sobre todas las predicciones agrupadas. Cada estación tiene el mismo peso en este resumen, independientemente de su volumen de viajes.
+`resumen.csv` promedia las métricas de los pares estación–bloque. En particular, RMSE y R² son medias de puntuaciones individuales, no métricas recalculadas sobre todas las predicciones agrupadas. Cada estación tiene el mismo peso en este resumen, independientemente de su volumen de viajes.
 
 #### Archivos generados
 
+Cada carpeta de ejecución `results/<algoritmo>/<fecha>_<nombre>/` contiene:
+
 | Archivo | Para qué sirve |
 |---|---|
-| `resumen.csv` | MAE, RMSE y R² generales por configuración |
-| `resultados_folds.csv` | Métricas detalladas por configuración, estación y fold |
-| `ttest.csv` | Comparaciones estadísticas del MAE de pares estación–fold |
+| `config.json` | Todas las opciones, fechas, commit de git y versión de Python: qué se ejecutó exactamente |
+| `resumen.csv` | MAE, RMSE y R² generales, los mismos de la referencia "misma hora de ayer" y los tiempos |
+| `resultados_folds.csv` | Métricas de cada estación en cada bloque |
+| `tiempos.csv` | Segundos de entrenamiento y de predicción de cada bloque |
+| `error_por_estacion.csv` | Métricas de cada estación promediadas entre bloques |
 | `error_por_hora.csv` | MAE y RMSE por hora del día |
-| `error_por_estacion.csv` | Métricas de cada estación promediadas entre folds |
-| `errores_por_grupo.csv` | Medias por grupo, generadas por `analyze_groups.py` |
-| `tiempos.csv` | Resúmenes de tiempos de entrenamiento y predicción, generados por `compare_models.py` |
-| `folds/fold_XX.json` | Predicciones y tiempos guardados en caché por el comparador |
+| `errores_por_grupo.csv` | Medias por grupo en todos los bloques y en los bloques desde el 2022-08-01 (solo en CSV con grupos, como `sel60`) |
+| `predicciones.csv.gz` | Fecha, estación, bloque, valor real y predicción |
 
-El nombre `rna_global_24h_52sem` significa red neuronal global, 24 horas de entrada y 52 semanas de entrenamiento. `rna` abrevia *red neuronal artificial*. Si se comparan varios conjuntos de atributos, sus nombres se añaden a la configuración. Los scripts MLP llaman `referencia_24h` a la referencia del día anterior; el comparador la llama `ref_ayer`.
-
-El t-test pareado compara el MAE de los mismos pares estación–fold. En `ttest.csv`, un valor `t` negativo indica que `config_a` tiene menor MAE medio que `config_b`. Un p-valor pequeño aporta evidencia bajo los supuestos del test; no demuestra por sí solo relevancia práctica. La dependencia entre estaciones y periodos, y las comparaciones múltiples, limitan su interpretación.
-
-Un orden útil de lectura es `resumen.csv` → `error_por_estacion.csv` / `error_por_hora.csv` → `errores_por_grupo.csv` → `ttest.csv`. Comprueba los folds evaluados y los atributos antes de comparar carpetas distintas.
-
-`analyze_groups.py` utiliza por defecto `results/selected_60/` y la tabla de las 60 estaciones seleccionadas. Para analizar la comparación de algoritmos:
-
-```bash
-python src/bicimadness/analyze_groups.py --resultados results/model_comparison
-```
+El t-test pareado compara el MAE de los mismos pares estación–bloque. Un p-valor pequeño aporta evidencia bajo los supuestos del test; no demuestra por sí solo relevancia práctica. La dependencia entre estaciones y periodos, y las comparaciones múltiples, limitan su interpretación.
 
 ### Regenerar los datos
 
@@ -806,7 +719,7 @@ Mantén disponible `data/raw/calendario_laboral.csv`. Comprueba que existe `data
 #### Datos de las top 50
 
 ```bash
-python src/bicimadness/preprocess.py
+python src/bicimadness/preprocesamiento/preprocess.py
 ```
 
 Genera `data/processed/salidas_por_hora_top50.csv` y `data/processed/estaciones_top50.csv`.
@@ -814,25 +727,27 @@ Genera `data/processed/salidas_por_hora_top50.csv` y `data/processed/estaciones_
 #### Datos de las 60 seleccionadas
 
 ```bash
-python src/bicimadness/count_stations.py
-python src/bicimadness/select_stations.py
+python src/bicimadness/preprocesamiento/count_stations.py
+python src/bicimadness/preprocesamiento/select_stations.py
 ```
 
 El primer comando genera recuentos y ubicaciones de todas las estaciones en `data/cache/`. El segundo selecciona estaciones, entrena la primera ronda si hace falta y escribe:
 
 - `data/processed/estaciones_seleccionadas.csv`
 - `data/processed/salidas_por_hora_sel60.csv`
-- Informes en `results/first_round/` y, cuando se regenera, `data/processed/salidas_por_hora_muestra.csv`
+- Informes en `results/primera_ronda/` y `data/cache/salidas_por_hora_primera_ronda.csv`
+
+La primera ronda entrena una red por estación para unas 200 estaciones (unos 10–20 minutos con 8 núcleos). Una red global con tantas estaciones (`--modo global`) no cabe en 8 GB de RAM.
 
 #### Meteorología
 
 ```bash
-python src/bicimadness/weather.py
+python src/bicimadness/preprocesamiento/weather.py
 ```
 
 Descarga los archivos anuales comprimidos en `data/raw/meteo/` si faltan y genera `data/raw/meteo_horario.csv`. Las descargas requieren acceso a Internet. El script cubre desde enero de 2021 hasta febrero de 2023, más allá de la última fecha de los viajes.
 
-Después de regenerar los datos, ejecuta el experimento principal y el análisis por grupos del inicio rápido.
+Después de regenerar los datos, ejecuta el experimento principal del inicio rápido.
 
 ### Solución de problemas
 
@@ -841,17 +756,16 @@ Después de regenerar los datos, ejecuta el experimento principal y el análisis
 | `ModuleNotFoundError` | Activa `.venv` e instala las dependencias con el `python -m pip` de ese entorno. En PyCharm, selecciona el mismo intérprete. |
 | Falta el CSV horario | Comprueba `data/processed/` y regenera el conjunto correspondiente si hace falta. |
 | Falta la meteorología o aparece un `KeyError` de fecha meteorológica | Genera `meteo_horario.csv` y comprueba que cubre todas las horas objetivo. Un periodo personalizado necesita meteorología del mismo periodo. |
-| Falta `error_por_estacion.csv` al analizar grupos | Ejecuta antes el modelo o indica con `--resultados` una carpeta que ya tenga resultados. |
-| Falta memoria durante el entrenamiento global | Usa `--jobs 1`. Reduce los folds globales simultáneos, pero no cambia el paralelismo por estación. |
+| Falta memoria durante el entrenamiento global | Usa `--jobs 1`. Reduce los bloques que se entrenan a la vez. |
 | La comparación tarda demasiado | Empieza con menos `--modelos` o aumenta `--folds-cada`; utiliza todos los folds para la comparación final. |
-| Los resultados no cambian tras modificar la configuración | Usa una carpeta `--resultados` nueva: la caché no verifica la configuración del experimento. |
+| Los resultados antiguos no cambian tras modificar la configuración | `antiguo/compare_models.py` guarda caché de folds: usa una carpeta `--resultados` nueva. |
 | Un conjunto personalizado no produce folds de test | Aporta historial suficiente para la ventana máxima, el periodo de entrenamiento y un bloque completo de test de 336 horas. |
 | `ConvergenceWarning` | El optimizador ha alcanzado el límite de iteraciones. Revisa el experimento antes de basarte en sus resultados; cambiar las capas ocultas desde el comando no cambia ese límite. |
 
 ### Limitaciones y trabajo futuro
 
-- **Meteorología observada en la hora objetivo:** la evaluación utiliza el tiempo real de la hora predicha. Una aplicación operativa necesitaría previsiones meteorológicas o variables disponibles al predecir; los resultados actuales con meteorología pueden ser optimistas.
-- **Sesgo de selección de estaciones:** la selección por demanda y disponibilidad utiliza el periodo del conjunto, y los grupos fácil/difícil se eligen con puntuaciones del mismo periodo posteriormente evaluado. Las comparaciones entre estos grupos son exploratorias, no una evaluación con un conjunto reservado independiente.
+- **Meteorología de la hora objetivo:** con `--meteo actual` (por defecto) el modelo usa el tiempo observado de la hora que predice, que equivale a un pronóstico perfecto a una hora vista. `--meteo anterior` usa solo el tiempo de la hora anterior; la diferencia entre ambos mide lo que aporta un buen pronóstico.
+- **Sesgo de selección de estaciones:** los grupos fácil/difícil se eligen con los bloques anteriores al 2022-08-01; solo las filas `desde_2022-08-01` de `errores_por_grupo.csv` los evalúan con semanas no usadas. La mejor configuración se elige y se informa con los mismos 29 bloques, así que su error puede ser ligeramente optimista.
 - **Observaciones dependientes:** los errores estación–fold no son completamente independientes; interpreta con cautela los p-valores del t-test.
 - **Cobertura histórica:** los viajes preparados terminan en febrero de 2023. Estos experimentos no establecen el rendimiento sobre la red actual.
 - **Demanda frente a salidas observadas:** los viajes reflejan el uso realizado y la disponibilidad de bicicletas; no miden directamente la demanda insatisfecha cuando una estación está vacía.
@@ -866,6 +780,6 @@ Las notas del proyecto proponen gráficos y mapas exploratorios, variables de ev
 - [Seguimiento del 20 de noviembre](docs/seguimiento_20nov.md): contexto y resultados preliminares; comprueba la configuración de cada ejecución antes de citarlos.
 - [Índice propuesto de la memoria](docs/indice_memoria.md)
 
-Para entender el código, empieza por `preprocess.py`; después lee `ventana()`, `folds()`, `evaluar_estacion()` y `evaluar_global()` en `model_per_station.py`. Continúa con `select_stations.py`, los valores por defecto de `model_selected60.py` y, finalmente, `compare_models.py` y `analyze_groups.py`.
+Para entender el código, empieza por `preprocesamiento/preprocess.py`; después lee `ventana()` y `bloques()` en `comun/datos.py`, `_bloque()` y `guardar()` en `comun/experimento.py`, y `entrenar()` en `rna/entrenar.py`. Continúa con `preprocesamiento/select_stations.py` y los dos scripts de comparación.
 
 [Volver al inicio](#bicimadness) · [Read in English](#english)

@@ -3,7 +3,7 @@
 Es el mismo recorrido de preprocess.py (mismos lectores y filtro de 2 minutos), pero sin
 quedarse con las 50 con más salidas. Lo usa select_stations.py para elegir las 60 estaciones.
 
-Salidas (en data/cache/, se regeneran con  python src/bicimadness/count_stations.py):
+Salidas (en data/cache/, se regeneran con  python src/bicimadness/preprocesamiento/count_stations.py):
   - estaciones_todas.csv     id, nombre, lat, lon (mediana de las posiciones de desbloqueo),
                              salidas totales y salidas por mes
   - salidas_todas.csv.gz     (fecha_hora, id_estacion, salidas) solo de las horas con alguna salida

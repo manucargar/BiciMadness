@@ -1,10 +1,10 @@
-"""MAE, RMSE y R² medios por grupo de estaciones (demanda alta/baja, céntrica/afueras, fácil/difícil).
+"""[ANTIGUO] MAE, RMSE y R² medios por grupo de estaciones (demanda alta/baja, céntrica/afueras, fácil/difícil).
 
-Junta estaciones_seleccionadas.csv con el error_por_estacion.csv que genera model_per_station.py.
+Junta estaciones_seleccionadas.csv con el error_por_estacion.csv que genera antiguo/compare_models.py.
+Las ejecuciones nuevas (rna/entrenar.py) ya guardan su propio errores_por_grupo.csv.
 
-Uso:  python src/bicimadness/model_selected60.py
-      python src/bicimadness/analyze_groups.py                            (lee results/selected_60/)
-      python src/bicimadness/analyze_groups.py --resultados results/otra_carpeta
+Uso:  python src/bicimadness/antiguo/compare_models.py
+      python src/bicimadness/antiguo/analyze_groups.py --resultados results/model_comparison
 
 Salida: <resultados>/errores_por_grupo.csv, una fila por grupo y configuración (red, referencia...).
 La media de salidas por hora del grupo ayuda a leer el MAE: con más demanda, más bicis de error.
@@ -14,13 +14,13 @@ import csv
 from collections import defaultdict
 from pathlib import Path
 
-PROYECTO = Path(__file__).resolve().parents[2]  # raíz del repositorio
+PROYECTO = Path(__file__).resolve().parents[3]  # raíz del repositorio
 GRUPOS = ["demanda_alta", "demanda_baja", "centrica", "afueras", "facil", "dificil"]
 
 
 def main():
     args = argparse.ArgumentParser()
-    args.add_argument("--resultados", default="results/selected_60",
+    args.add_argument("--resultados", default="results/model_comparison",
                       help="carpeta con error_por_estacion.csv (rutas relativas: desde la raíz del repositorio)")
     args.add_argument("--estaciones", default="data/processed/estaciones_seleccionadas.csv", help="estaciones con su grupo")
     args = args.parse_args()
