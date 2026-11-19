@@ -1,0 +1,1004 @@
+{
+  "weather_source": "data\\raw\\meteo_horario.csv",
+  "target_source": "data\\processed\\salidas_por_hora_sel60.csv",
+  "station_metadata_source": "data\\processed\\estaciones_seleccionadas.csv",
+  "hours": 18676,
+  "stations": 60,
+  "start": "2021-01-01 01:00",
+  "end": "2023-02-18 04:00",
+  "target_shape": [
+    18676,
+    60
+  ],
+  "exogenous_shape": [
+    18676,
+    9
+  ],
+  "exogenous_features": [
+    "temperatura",
+    "precipitacion",
+    "hora_sin",
+    "hora_cos",
+    "dia_semana_sin",
+    "dia_semana_cos",
+    "mes_sin",
+    "mes_cos",
+    "festivo"
+  ],
+  "station_ids": [
+    "43",
+    "57",
+    "208",
+    "175",
+    "90",
+    "220",
+    "49",
+    "45",
+    "132",
+    "64",
+    "257",
+    "225",
+    "229",
+    "258",
+    "267",
+    "248",
+    "238",
+    "239",
+    "263",
+    "261",
+    "1",
+    "35",
+    "15",
+    "25",
+    "40",
+    "91",
+    "113",
+    "72",
+    "85",
+    "98",
+    "256",
+    "223",
+    "262",
+    "237",
+    "227",
+    "214",
+    "222",
+    "269",
+    "144",
+    "234",
+    "30",
+    "170",
+    "9",
+    "79",
+    "181",
+    "84",
+    "100",
+    "210",
+    "206",
+    "149",
+    "60",
+    "250",
+    "36",
+    "105",
+    "195",
+    "54",
+    "120",
+    "249",
+    "3",
+    "10"
+  ],
+  "station_metadata": [
+    {
+      "id_estacion": "43",
+      "nombre": "Plaza de la Cebada",
+      "grupo": "demanda_alta",
+      "motivo": "86838 salidas",
+      "salidas_totales": "86838",
+      "media_salidas_hora": "4.65",
+      "dist_sol_km": "0.77",
+      "lat": "40.411274",
+      "lon": "-3.708834",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "57",
+      "nombre": "Plaza de Lavapiés",
+      "grupo": "demanda_alta",
+      "motivo": "81548 salidas",
+      "salidas_totales": "81548",
+      "media_salidas_hora": "4.366",
+      "dist_sol_km": "0.99",
+      "lat": "40.408306",
+      "lon": "-3.700711",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "208",
+      "nombre": "Quevedo",
+      "grupo": "demanda_alta",
+      "motivo": "65083 salidas",
+      "salidas_totales": "65083",
+      "media_salidas_hora": "3.485",
+      "dist_sol_km": "1.87",
+      "lat": "40.433694",
+      "lon": "-3.704667",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "175",
+      "nombre": "Segovia 45",
+      "grupo": "demanda_alta",
+      "motivo": "64238 salidas",
+      "salidas_totales": "64238",
+      "media_salidas_hora": "3.44",
+      "dist_sol_km": "1.23",
+      "lat": "40.413736",
+      "lon": "-3.717487",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "90",
+      "nombre": "Puerta de Madrid",
+      "grupo": "demanda_alta",
+      "motivo": "62319 salidas",
+      "salidas_totales": "62319",
+      "media_salidas_hora": "3.337",
+      "dist_sol_km": "2.06",
+      "lat": "40.421501",
+      "lon": "-3.680008",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "220",
+      "nombre": "Marqués de Vadillo",
+      "grupo": "demanda_alta",
+      "motivo": "61668 salidas",
+      "salidas_totales": "61668",
+      "media_salidas_hora": "3.302",
+      "dist_sol_km": "2.35",
+      "lat": "40.398247",
+      "lon": "-3.716591",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "49",
+      "nombre": "Puerta de Toledo",
+      "grupo": "demanda_alta",
+      "motivo": "57742 salidas",
+      "salidas_totales": "57742",
+      "media_salidas_hora": "3.092",
+      "dist_sol_km": "1.27",
+      "lat": "40.407036",
+      "lon": "-3.711051",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "45",
+      "nombre": "Antón Martín",
+      "grupo": "demanda_alta",
+      "motivo": "57737 salidas",
+      "salidas_totales": "57737",
+      "media_salidas_hora": "3.092",
+      "dist_sol_km": "0.65",
+      "lat": "40.412205",
+      "lon": "-3.699115",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "132",
+      "nombre": "Paseo de la Florida",
+      "grupo": "demanda_alta",
+      "motivo": "57545 salidas",
+      "salidas_totales": "57545",
+      "media_salidas_hora": "3.081",
+      "dist_sol_km": "1.69",
+      "lat": "40.421967",
+      "lon": "-3.722498",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "64",
+      "nombre": "Plaza de la Independencia",
+      "grupo": "demanda_alta",
+      "motivo": "53824 salidas",
+      "salidas_totales": "53824",
+      "media_salidas_hora": "2.882",
+      "dist_sol_km": "1.33",
+      "lat": "40.419752",
+      "lon": "-3.688398",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "257",
+      "nombre": "Manuel Caldeiro",
+      "grupo": "demanda_baja",
+      "motivo": "5653 salidas",
+      "salidas_totales": "5653",
+      "media_salidas_hora": "0.303",
+      "dist_sol_km": "7.11",
+      "lat": "40.47938",
+      "lon": "-3.68532",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "225",
+      "nombre": "Pedro Rico",
+      "grupo": "demanda_baja",
+      "motivo": "6294 salidas",
+      "salidas_totales": "6294",
+      "media_salidas_hora": "0.337",
+      "dist_sol_km": "7.25",
+      "lat": "40.481086",
+      "lon": "-3.688463",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "229",
+      "nombre": "Pavones",
+      "grupo": "demanda_baja",
+      "motivo": "7134 salidas",
+      "salidas_totales": "7134",
+      "media_salidas_hora": "0.382",
+      "dist_sol_km": "6.13",
+      "lat": "40.400368",
+      "lon": "-3.634587",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "258",
+      "nombre": "Serrano 113",
+      "grupo": "demanda_baja",
+      "motivo": "7350 salidas",
+      "salidas_totales": "7350",
+      "media_salidas_hora": "0.394",
+      "dist_sol_km": "3.06",
+      "lat": "40.44106",
+      "lon": "-3.68609",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "267",
+      "nombre": "Ciudad Universitaria 2",
+      "grupo": "demanda_baja",
+      "motivo": "8243 salidas",
+      "salidas_totales": "8243",
+      "media_salidas_hora": "0.441",
+      "dist_sol_km": "3.54",
+      "lat": "40.44342",
+      "lon": "-3.72693",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "248",
+      "nombre": "Avenida Brasilia",
+      "grupo": "demanda_baja",
+      "motivo": "8530 salidas",
+      "salidas_totales": "8530",
+      "media_salidas_hora": "0.457",
+      "dist_sol_km": "4.22",
+      "lat": "40.43666",
+      "lon": "-3.66096",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "238",
+      "nombre": "Carlota O’Neill",
+      "grupo": "demanda_baja",
+      "motivo": "8725 salidas",
+      "salidas_totales": "8725",
+      "media_salidas_hora": "0.467",
+      "dist_sol_km": "5.5",
+      "lat": "40.443705",
+      "lon": "-3.648958",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "239",
+      "nombre": "Derechos Humanos",
+      "grupo": "demanda_baja",
+      "motivo": "8935 salidas",
+      "salidas_totales": "8935",
+      "media_salidas_hora": "0.478",
+      "dist_sol_km": "4.77",
+      "lat": "40.439657",
+      "lon": "-3.655766",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "263",
+      "nombre": "López Pozas",
+      "grupo": "demanda_baja",
+      "motivo": "9024 salidas",
+      "salidas_totales": "9024",
+      "media_salidas_hora": "0.483",
+      "dist_sol_km": "5.42",
+      "lat": "40.46361",
+      "lon": "-3.68514",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "261",
+      "nombre": "Doctor Fleming",
+      "grupo": "demanda_baja",
+      "motivo": "9399 salidas",
+      "salidas_totales": "9399",
+      "media_salidas_hora": "0.503",
+      "dist_sol_km": "4.47",
+      "lat": "40.45546",
+      "lon": "-3.68844",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "1",
+      "nombre": "Puerta del Sol A",
+      "grupo": "centrica",
+      "motivo": "Puerta del Sol (153 m)",
+      "salidas_totales": "32152",
+      "media_salidas_hora": "1.722",
+      "dist_sol_km": "0.15",
+      "lat": "40.417214",
+      "lon": "-3.701834",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "35",
+      "nombre": "Calle Mayor",
+      "grupo": "centrica",
+      "motivo": "Plaza Mayor (104 m)",
+      "salidas_totales": "20989",
+      "media_salidas_hora": "1.124",
+      "dist_sol_km": "0.29",
+      "lat": "40.416364",
+      "lon": "-3.706897",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "15",
+      "nombre": "Ventura Rodríguez",
+      "grupo": "centrica",
+      "motivo": "Plaza de España (329 m)",
+      "salidas_totales": "28495",
+      "media_salidas_hora": "1.526",
+      "dist_sol_km": "1.32",
+      "lat": "40.426096",
+      "lon": "-3.713479",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "25",
+      "nombre": "Jacometrezo",
+      "grupo": "centrica",
+      "motivo": "Callao / Gran Vía (50 m)",
+      "salidas_totales": "29093",
+      "media_salidas_hora": "1.558",
+      "dist_sol_km": "0.43",
+      "lat": "40.420078",
+      "lon": "-3.706538",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "40",
+      "nombre": "Conde de Romanones",
+      "grupo": "centrica",
+      "motivo": "Palacio Real / Ópera (249 m)",
+      "salidas_totales": "21005",
+      "media_salidas_hora": "1.125",
+      "dist_sol_km": "0.7",
+      "lat": "40.4168",
+      "lon": "-3.71183",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "91",
+      "nombre": "Cibeles",
+      "grupo": "centrica",
+      "motivo": "Cibeles (78 m)",
+      "salidas_totales": "33110",
+      "media_salidas_hora": "1.773",
+      "dist_sol_km": "0.89",
+      "lat": "40.418652",
+      "lon": "-3.69335",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "113",
+      "nombre": "Columela",
+      "grupo": "centrica",
+      "motivo": "Puerta de Alcalá / Retiro (173 m)",
+      "salidas_totales": "28204",
+      "media_salidas_hora": "1.51",
+      "dist_sol_km": "1.38",
+      "lat": "40.421525",
+      "lon": "-3.688437",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "72",
+      "nombre": "Espalter",
+      "grupo": "centrica",
+      "motivo": "Museo del Prado (132 m)",
+      "salidas_totales": "18929",
+      "media_salidas_hora": "1.014",
+      "dist_sol_km": "1.15",
+      "lat": "40.412837",
+      "lon": "-3.691202",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "85",
+      "nombre": "Atocha B",
+      "grupo": "centrica",
+      "motivo": "Atocha (112 m)",
+      "salidas_totales": "17122",
+      "media_salidas_hora": "0.917",
+      "dist_sol_km": "1.55",
+      "lat": "40.40749",
+      "lon": "-3.690123",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "98",
+      "nombre": "Plaza de Colón",
+      "grupo": "centrica",
+      "motivo": "Plaza de Colón (98 m)",
+      "salidas_totales": "12583",
+      "media_salidas_hora": "0.674",
+      "dist_sol_km": "1.55",
+      "lat": "40.425705",
+      "lon": "-3.68937",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "256",
+      "nombre": "Torre Cepsa",
+      "grupo": "afueras",
+      "motivo": "6.5 km de Sol",
+      "salidas_totales": "11771",
+      "media_salidas_hora": "0.63",
+      "dist_sol_km": "6.52",
+      "lat": "40.47435",
+      "lon": "-3.68797",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "223",
+      "nombre": "Gutierre de Cetina",
+      "grupo": "afueras",
+      "motivo": "5.5 km de Sol",
+      "salidas_totales": "15355",
+      "media_salidas_hora": "0.822",
+      "dist_sol_km": "5.49",
+      "lat": "40.429706",
+      "lon": "-3.640994",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "262",
+      "nombre": "Pío XII",
+      "grupo": "afueras",
+      "motivo": "5.3 km de Sol",
+      "salidas_totales": "14203",
+      "media_salidas_hora": "0.76",
+      "dist_sol_km": "5.33",
+      "lat": "40.46041",
+      "lon": "-3.67712",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "237",
+      "nombre": "C.D. Concepción",
+      "grupo": "afueras",
+      "motivo": "5.2 km de Sol",
+      "salidas_totales": "14686",
+      "media_salidas_hora": "0.786",
+      "dist_sol_km": "5.19",
+      "lat": "40.437151",
+      "lon": "-3.648359",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "227",
+      "nombre": "Marroquina",
+      "grupo": "afueras",
+      "motivo": "4.9 km de Sol",
+      "salidas_totales": "15957",
+      "media_salidas_hora": "0.854",
+      "dist_sol_km": "4.91",
+      "lat": "40.408264",
+      "lon": "-3.646697",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "214",
+      "nombre": "Metro Tetuán",
+      "grupo": "afueras",
+      "motivo": "4.9 km de Sol",
+      "salidas_totales": "25452",
+      "media_salidas_hora": "1.363",
+      "dist_sol_km": "4.89",
+      "lat": "40.46075",
+      "lon": "-3.698993",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "222",
+      "nombre": "Condesa de Venadito",
+      "grupo": "afueras",
+      "motivo": "4.9 km de Sol",
+      "salidas_totales": "10650",
+      "media_salidas_hora": "0.57",
+      "dist_sol_km": "4.88",
+      "lat": "40.44315",
+      "lon": "-3.65741",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "269",
+      "nombre": "Facultad Derecho",
+      "grupo": "afueras",
+      "motivo": "4.4 km de Sol",
+      "salidas_totales": "10795",
+      "media_salidas_hora": "0.578",
+      "dist_sol_km": "4.38",
+      "lat": "40.45109",
+      "lon": "-3.72937",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "144",
+      "nombre": "Serrano 210",
+      "grupo": "afueras",
+      "motivo": "4.2 km de Sol",
+      "salidas_totales": "10329",
+      "media_salidas_hora": "0.553",
+      "dist_sol_km": "4.22",
+      "lat": "40.451019",
+      "lon": "-3.681796",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "234",
+      "nombre": "Sierra Toledana",
+      "grupo": "afueras",
+      "motivo": "4.1 km de Sol",
+      "salidas_totales": "15539",
+      "media_salidas_hora": "0.832",
+      "dist_sol_km": "4.14",
+      "lat": "40.399015",
+      "lon": "-3.660777",
+      "r2_primera_ronda": ""
+    },
+    {
+      "id_estacion": "30",
+      "nombre": "Plaza de las Salesas",
+      "grupo": "facil",
+      "motivo": "R² = 0.510",
+      "salidas_totales": "45183",
+      "media_salidas_hora": "2.419",
+      "dist_sol_km": "1.09",
+      "lat": "40.423855",
+      "lon": "-3.694475",
+      "r2_primera_ronda": "0.51"
+    },
+    {
+      "id_estacion": "170",
+      "nombre": "Juan Bravo 50",
+      "grupo": "facil",
+      "motivo": "R² = 0.481",
+      "salidas_totales": "45467",
+      "media_salidas_hora": "2.435",
+      "dist_sol_km": "2.91",
+      "lat": "40.432366",
+      "lon": "-3.675855",
+      "r2_primera_ronda": "0.4815"
+    },
+    {
+      "id_estacion": "9",
+      "nombre": "Alonso Martínez",
+      "grupo": "facil",
+      "motivo": "R² = 0.477",
+      "salidas_totales": "52453",
+      "media_salidas_hora": "2.809",
+      "dist_sol_km": "1.4",
+      "lat": "40.427868",
+      "lon": "-3.69544",
+      "r2_primera_ronda": "0.4775"
+    },
+    {
+      "id_estacion": "79",
+      "nombre": "Menéndez Pelayo",
+      "grupo": "facil",
+      "motivo": "R² = 0.476",
+      "salidas_totales": "43516",
+      "media_salidas_hora": "2.33",
+      "dist_sol_km": "2.34",
+      "lat": "40.40828",
+      "lon": "-3.678484",
+      "r2_primera_ronda": "0.4758"
+    },
+    {
+      "id_estacion": "181",
+      "nombre": "Puente Praga",
+      "grupo": "facil",
+      "motivo": "R² = 0.474",
+      "salidas_totales": "33894",
+      "media_salidas_hora": "1.815",
+      "dist_sol_km": "2.09",
+      "lat": "40.39818",
+      "lon": "-3.702392",
+      "r2_primera_ronda": "0.4737"
+    },
+    {
+      "id_estacion": "84",
+      "nombre": "Atocha A",
+      "grupo": "facil",
+      "motivo": "R² = 0.465",
+      "salidas_totales": "36448",
+      "media_salidas_hora": "1.952",
+      "dist_sol_km": "1.54",
+      "lat": "40.407568",
+      "lon": "-3.690225",
+      "r2_primera_ronda": "0.4653"
+    },
+    {
+      "id_estacion": "100",
+      "nombre": "Villanueva",
+      "grupo": "facil",
+      "motivo": "R² = 0.465",
+      "salidas_totales": "18676",
+      "media_salidas_hora": "1.0",
+      "dist_sol_km": "1.54",
+      "lat": "40.422658",
+      "lon": "-3.687055",
+      "r2_primera_ronda": "0.4653"
+    },
+    {
+      "id_estacion": "210",
+      "nombre": "Parque Santander",
+      "grupo": "facil",
+      "motivo": "R² = 0.456",
+      "salidas_totales": "33779",
+      "media_salidas_hora": "1.809",
+      "dist_sol_km": "2.72",
+      "lat": "40.441139",
+      "lon": "-3.708083",
+      "r2_primera_ronda": "0.4564"
+    },
+    {
+      "id_estacion": "206",
+      "nombre": "Rubén Darío",
+      "grupo": "facil",
+      "motivo": "R² = 0.456",
+      "salidas_totales": "31564",
+      "media_salidas_hora": "1.69",
+      "dist_sol_km": "2.07",
+      "lat": "40.433111",
+      "lon": "-3.691556",
+      "r2_primera_ronda": "0.4555"
+    },
+    {
+      "id_estacion": "149",
+      "nombre": "Glorieta de los Cuatro Caminos",
+      "grupo": "facil",
+      "motivo": "R² = 0.444",
+      "salidas_totales": "53777",
+      "media_salidas_hora": "2.879",
+      "dist_sol_km": "3.27",
+      "lat": "40.446367",
+      "lon": "-3.703667",
+      "r2_primera_ronda": "0.4437"
+    },
+    {
+      "id_estacion": "60",
+      "nombre": "Plaza del Carmen",
+      "grupo": "dificil",
+      "motivo": "R² = 0.031",
+      "salidas_totales": "12654",
+      "media_salidas_hora": "0.678",
+      "dist_sol_km": "0.17",
+      "lat": "40.418419",
+      "lon": "-3.703241",
+      "r2_primera_ronda": "0.031"
+    },
+    {
+      "id_estacion": "250",
+      "nombre": "Avenida Bruselas",
+      "grupo": "dificil",
+      "motivo": "R² = 0.119",
+      "salidas_totales": "10826",
+      "media_salidas_hora": "0.58",
+      "dist_sol_km": "4.2",
+      "lat": "40.43865",
+      "lon": "-3.66301",
+      "r2_primera_ronda": "0.1193"
+    },
+    {
+      "id_estacion": "36",
+      "nombre": "Plaza de la Provincia",
+      "grupo": "dificil",
+      "motivo": "R² = 0.123",
+      "salidas_totales": "19037",
+      "media_salidas_hora": "1.019",
+      "dist_sol_km": "0.3",
+      "lat": "40.41501",
+      "lon": "-3.706103",
+      "r2_primera_ronda": "0.1235"
+    },
+    {
+      "id_estacion": "105",
+      "nombre": "Palacio de Deportes",
+      "grupo": "dificil",
+      "motivo": "R² = 0.131",
+      "salidas_totales": "16933",
+      "media_salidas_hora": "0.907",
+      "dist_sol_km": "2.67",
+      "lat": "40.42478",
+      "lon": "-3.67384",
+      "r2_primera_ronda": "0.1309"
+    },
+    {
+      "id_estacion": "195",
+      "nombre": "Alcalá-Ventas",
+      "grupo": "dificil",
+      "motivo": "R² = 0.157",
+      "salidas_totales": "18760",
+      "media_salidas_hora": "1.004",
+      "dist_sol_km": "3.67",
+      "lat": "40.430167",
+      "lon": "-3.663889",
+      "r2_primera_ronda": "0.1566"
+    },
+    {
+      "id_estacion": "54",
+      "nombre": "Museo Reina Sofía",
+      "grupo": "dificil",
+      "motivo": "R² = 0.192",
+      "salidas_totales": "32213",
+      "media_salidas_hora": "1.725",
+      "dist_sol_km": "1.29",
+      "lat": "40.408368",
+      "lon": "-3.693346",
+      "r2_primera_ronda": "0.192"
+    },
+    {
+      "id_estacion": "120",
+      "nombre": "Pintor Rosales",
+      "grupo": "dificil",
+      "motivo": "R² = 0.209",
+      "salidas_totales": "16966",
+      "media_salidas_hora": "0.908",
+      "dist_sol_km": "1.86",
+      "lat": "40.427657",
+      "lon": "-3.720513",
+      "r2_primera_ronda": "0.2091"
+    },
+    {
+      "id_estacion": "249",
+      "nombre": "Camilo José Cela",
+      "grupo": "dificil",
+      "motivo": "R² = 0.225",
+      "salidas_totales": "13874",
+      "media_salidas_hora": "0.743",
+      "dist_sol_km": "3.82",
+      "lat": "40.4378",
+      "lon": "-3.66779",
+      "r2_primera_ronda": "0.2249"
+    },
+    {
+      "id_estacion": "3",
+      "nombre": "Miguel Moya",
+      "grupo": "dificil",
+      "motivo": "R² = 0.228",
+      "salidas_totales": "30091",
+      "media_salidas_hora": "1.611",
+      "dist_sol_km": "0.45",
+      "lat": "40.420589",
+      "lon": "-3.705842",
+      "r2_primera_ronda": "0.228"
+    },
+    {
+      "id_estacion": "10",
+      "nombre": "Plaza de San Miguel",
+      "grupo": "dificil",
+      "motivo": "R² = 0.230",
+      "salidas_totales": "32164",
+      "media_salidas_hora": "1.722",
+      "dist_sol_km": "0.52",
+      "lat": "40.415606",
+      "lon": "-3.709508",
+      "r2_primera_ronda": "0.2295"
+    }
+  ],
+  "missing_targets": 0,
+  "negative_targets": 0,
+  "missing_weather": 0,
+  "target_semantics": "y[t] contains all 60 departures in hour t; exogenous[t] is weather/calendar for hour t",
+  "candidate_windows": [
+    24
+  ],
+  "candidate_training_weeks": [
+    52
+  ],
+  "test_hours": 336,
+  "inner_validation_hours": 168,
+  "folds": [
+    {
+      "fold": 0,
+      "test_start": 8760,
+      "test_end": 9096
+    },
+    {
+      "fold": 1,
+      "test_start": 9096,
+      "test_end": 9432
+    },
+    {
+      "fold": 2,
+      "test_start": 9432,
+      "test_end": 9768
+    },
+    {
+      "fold": 3,
+      "test_start": 9768,
+      "test_end": 10104
+    },
+    {
+      "fold": 4,
+      "test_start": 10104,
+      "test_end": 10440
+    },
+    {
+      "fold": 5,
+      "test_start": 10440,
+      "test_end": 10776
+    },
+    {
+      "fold": 6,
+      "test_start": 10776,
+      "test_end": 11112
+    },
+    {
+      "fold": 7,
+      "test_start": 11112,
+      "test_end": 11448
+    },
+    {
+      "fold": 8,
+      "test_start": 11448,
+      "test_end": 11784
+    },
+    {
+      "fold": 9,
+      "test_start": 11784,
+      "test_end": 12120
+    },
+    {
+      "fold": 10,
+      "test_start": 12120,
+      "test_end": 12456
+    },
+    {
+      "fold": 11,
+      "test_start": 12456,
+      "test_end": 12792
+    },
+    {
+      "fold": 12,
+      "test_start": 12792,
+      "test_end": 13128
+    },
+    {
+      "fold": 13,
+      "test_start": 13128,
+      "test_end": 13464
+    },
+    {
+      "fold": 14,
+      "test_start": 13464,
+      "test_end": 13800
+    },
+    {
+      "fold": 15,
+      "test_start": 13800,
+      "test_end": 14136
+    },
+    {
+      "fold": 16,
+      "test_start": 14136,
+      "test_end": 14472
+    },
+    {
+      "fold": 17,
+      "test_start": 14472,
+      "test_end": 14808
+    },
+    {
+      "fold": 18,
+      "test_start": 14808,
+      "test_end": 15144
+    },
+    {
+      "fold": 19,
+      "test_start": 15144,
+      "test_end": 15480
+    },
+    {
+      "fold": 20,
+      "test_start": 15480,
+      "test_end": 15816
+    },
+    {
+      "fold": 21,
+      "test_start": 15816,
+      "test_end": 16152
+    },
+    {
+      "fold": 22,
+      "test_start": 16152,
+      "test_end": 16488
+    },
+    {
+      "fold": 23,
+      "test_start": 16488,
+      "test_end": 16824
+    },
+    {
+      "fold": 24,
+      "test_start": 16824,
+      "test_end": 17160
+    },
+    {
+      "fold": 25,
+      "test_start": 17160,
+      "test_end": 17496
+    },
+    {
+      "fold": 26,
+      "test_start": 17496,
+      "test_end": 17832
+    },
+    {
+      "fold": 27,
+      "test_start": 17832,
+      "test_end": 18168
+    },
+    {
+      "fold": 28,
+      "test_start": 18168,
+      "test_end": 18504
+    }
+  ],
+  "sequence_shapes": {
+    "24": {
+      "past_targets": [
+        18652,
+        24,
+        60
+      ],
+      "target_exogenous": [
+        18652,
+        9
+      ],
+      "target": [
+        18652,
+        60
+      ],
+      "target_timestamp_first": "2021-01-02 01:00",
+      "target_timestamp_last": "2023-02-18 04:00"
+    }
+  },
+  "demo_window": 24,
+  "demo_past_targets_shape": [
+    18652,
+    24,
+    60
+  ],
+  "demo_target_exogenous_shape": [
+    18652,
+    9
+  ],
+  "demo_target_shape": [
+    18652,
+    60
+  ]
+}
