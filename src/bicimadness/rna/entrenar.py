@@ -3,7 +3,7 @@
 Cada ejecución es un estudio: una configuración concreta (CSV, modo, variables, ventana...). Los resultados
 se guardan en results/rna/<fecha>_<nombre>/ y se comparan con  python src/bicimadness/comparar_estudios.py rna
 
-Uso (sin argumentos: sel60, red global, todas las variables, ventana 24 h, 52 semanas):
+Uso (sin argumentos: sel60, red global sin id de estación, todas las variables, ventana 24 h, 52 semanas):
   python src/bicimadness/rna/entrenar.py
   python src/bicimadness/rna/entrenar.py top50
   python src/bicimadness/rna/entrenar.py sel60 --modo estacion

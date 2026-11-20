@@ -84,7 +84,7 @@ For example, to predict departures between **09:00 and 09:59**, a model with a 2
 - The observed departure counts from 09:00 yesterday through 08:00 today.
 - Calendar information for today's 09:00 hour.
 - Temperature and rainfall for that target hour, when weather features are enabled.
-- The station identifier, when using a global model.
+- No station identifier: global models do not know which station they predict, so they can be applied to any station (`--con-id-estacion` adds it, only for comparison).
 
 The output is a nonnegative numeric estimate, such as `3.7` departures. Predictions are clipped at zero but are not rounded to whole bicycles before evaluation.
 
@@ -115,9 +115,16 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 │   │   └── comparar.py          # Reads saved runs; paired t-test
 │   ├── rna/
 │   │   └── entrenar.py          # Neural network (MLP): one study per run
+│   ├── ridge/
+│   │   └── entrenar.py          # Ridge regression (linear contrast, from Juan's work)
+│   ├── lstm/
+│   │   └── entrenar.py          # LSTM: multivariate by default, also global / per station (from Manu's work)
 │   ├── comparar_estudios.py     # Compare the studies of one algorithm
 │   ├── comparar_algoritmos.py   # Compare the best study of each algorithm
-│   └── antiguo/                 # Previous all-in-one comparison (Ridge, boosting, LSTM...)
+│   └── antiguo/                 # Old scripts, kept for reference (not used by the pipeline)
+│       ├── compare_models.py    # Previous all-in-one comparison (Ridge, boosting, LSTM...)
+│       ├── ridge_juan/          # Juan's original Ridge vs. MLP script (defeat_linearity.py)
+│       └── lstm_manu/           # Manu's original multivariate LSTM scripts
 ├── data/
 │   ├── raw/                   # Original trips, holiday calendar, and weather
 │   ├── processed/             # Hourly datasets and station selection tables
@@ -128,7 +135,7 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 
 Raw trip archives, generated results, intermediate caches, and `.venv/` are excluded by `.gitignore`. The root-level `mempalace.yaml` and `entities.json` are local memory-tool configuration, not inputs to the forecasting pipeline.
 
-Each algorithm has its own folder (`rna/` now; `lstm/`, `gradient_boosting/`... later) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
+Each algorithm has its own folder (`rna/`, `ridge/`, `lstm/`; `gradient_boosting/`... later) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
 
 ### Data and preprocessing
 
@@ -204,15 +211,44 @@ The selection table, `estaciones_seleccionadas.csv`, records station names, grou
 | `--jobs` | 2 global / all cores station | Blocks trained in parallel |
 | `--hasta` | — | Only test blocks starting before this date |
 
-A **station model** learns from one station's observations. A **global model** learns from all selected stations and receives the station ID as a one-hot feature.
+A **station model** learns from one station's observations. A **global model** learns from all selected stations but, by default, is **not told which station** each row belongs to: it only sees the history and the features. The project is meant to work later with any station, including ones not used for training, so the station ID is left out. `--con-id-estacion` adds it as a one-hot feature, only to measure how much it would help; such a model is tied to the training stations.
 
 One-hot encoding represents a category as separate 0/1 columns: for example, hour of day uses 24 columns. Calendar features include hour, weekday, month, and holiday status; optional numerical features are temperature and precipitation.
 
 Inputs are standardized with the mean and deviation of each training block, and networks use early stopping and seed `0` (`--semilla`). Early stopping can finish training sooner.
 
+#### Ridge regression (`ridge/entrenar.py`)
+
+A regularized linear model with exactly the same inputs, options, blocks, and output files as the MLP (`--modo global` or `--modo estacion`). It answers Juan's question: if Ridge matches the MLP, the non-linearity adds nothing. The regularization strength is chosen automatically among 0.01, 0.1, 1, 10, 100, and 1000 by efficient leave-one-out validation (`RidgeCV`). It has no options of its own.
+
+#### LSTM (`lstm/entrenar.py`)
+
+A recurrent network that reads the previous `--ventana` hours as a sequence; its last state is joined with the features of the predicted hour, and a dense head (hidden → ReLU → dropout → output) gives the prediction. It has three modes:
+
+| `--modo` | What the network sees to predict station A | How it knows the station | Models |
+|---|---|---|---|
+| `multivariante` (default) | The history of **all** stations at once (each step is a vector of 60 counts); it predicts all stations together | By position: each station has its own input channel and output neuron | 1 |
+| `global` | Only A's history | It does not (works for any station; `--con-id-estacion` adds a one-hot) | 1 (shared) |
+| `estacion` | Only A's history | — | 1 per station |
+
+The multivariate mode is Manu's model: it can use what is happening at the other stations, but it only works for the set of stations it was trained on (like `estacion` mode). Only `global` works for any station. The other two modes treat each row as one station, like the MLP and Ridge. All three use the same blocks and output files, so `comparar_algoritmos.py` compares them directly.
+
+| Option | Default | Meaning |
+|---|---|---|
+| `--oculta` | 64 | LSTM state size (also the dense layer size) |
+| `--capas` | 1 | Stacked LSTM layers |
+| `--dropout` | 0.1 | Dropout in the head (and between LSTM layers if there are several) |
+| `--epocas` | 30 | Maximum epochs |
+| `--paciencia` | 5 | Stop after this many epochs without improving the validation MAE |
+| `--lote` | 256 | Examples per training step |
+| `--lr`, `--weight-decay` | 1e-3, 1e-5 | AdamW optimizer settings |
+| `--validacion-h` | 168 | Last training hours (of each station) used for early stopping: chronological, not random |
+
+Training minimizes the L1 loss (MAE), clips gradients to norm 1, and keeps the epoch with the best validation MAE. History and target are standardized with the training mean and deviation (per station in multivariate mode). It runs on CPU; `LSTM_DISPOSITIVO=mps` tries the Mac GPU. `--jobs` defaults to 2 in multivariate mode, 1 in global mode, and all cores per station.
+
 #### Previous algorithm comparison (`antiguo/`)
 
-Until each algorithm has its own folder, `antiguo/compare_models.py` keeps the earlier all-in-one comparison. Its outputs use the old format and are not read by `comparar_algoritmos.py`. It evaluates these model names:
+`antiguo/` keeps old scripts for reference only; their outputs use the old format and are not read by `comparar_algoritmos.py`. `ridge_juan/defeat_linearity.py` and `lstm_manu/` are Juan's and Manu's original scripts, now replaced by `ridge/` and `lstm/`. `antiguo/compare_models.py` keeps the earlier all-in-one comparison. Its outputs use the old format and are not read by `comparar_algoritmos.py`. It evaluates these model names:
 
 | CLI name | What it does |
 |---|---|
@@ -241,7 +277,7 @@ Within a test period, predictions use the actual observations preceding each tar
 
 `antiguo/compare_models.py` uses every third fold by default (`--folds-cada 3`). Use `--folds-cada 1` for all folds.
 
-Internal early-stopping validation is separate from this outer evaluation. MLP early stopping and the LSTM's validation use random subsets of training observations, rather than a final chronological validation segment.
+Internal early-stopping validation is separate from this outer evaluation. MLP early stopping uses a random 10 % of the training observations; the LSTM (`lstm/`) uses the last training week, a chronological segment; Ridge chooses its regularization by leave-one-out on the training block.
 
 ### Running experiments
 
@@ -254,12 +290,20 @@ python src/bicimadness/rna/entrenar.py sel60 --modo estacion # one network per s
 python src/bicimadness/rna/entrenar.py sel60 --variables hora,dia_semana,mes,festivo --nombre sel60_calendario
 python src/bicimadness/rna/entrenar.py sel60 --meteo anterior
 python src/bicimadness/rna/entrenar.py sel60 --ventana 48 --semanas 26
+
+python src/bicimadness/ridge/entrenar.py sel60                  # Ridge, global
+python src/bicimadness/ridge/entrenar.py sel60 --modo estacion  # Ridge, one per station
+
+python src/bicimadness/lstm/entrenar.py sel60                   # LSTM, multivariate (Manu's model)
+python src/bicimadness/lstm/entrenar.py sel60 --modo global     # LSTM, shared, any station
+python src/bicimadness/lstm/entrenar.py sel60 --modo estacion   # LSTM, one per station
 ```
 
-Each run creates `results/rna/<date>_<name>/`; earlier runs are never overwritten. For the full list of options:
+Each run creates `results/<algorithm>/<date>_<name>/` (`rna`, `ridge`, `lstm`); earlier runs are never overwritten. All accept the common options (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). For the full list of options:
 
 ```bash
 python src/bicimadness/rna/entrenar.py --help
+python src/bicimadness/lstm/entrenar.py --help
 ```
 
 #### Compare the studies of one algorithm
@@ -275,9 +319,10 @@ For each CSV, ranks the runs by MAE and runs a paired t-test of each against the
 
 ```bash
 python src/bicimadness/comparar_algoritmos.py
+python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no   # only the global models
 ```
 
-For each CSV, takes the lowest-MAE run from every algorithm folder in `results/`, adds the "same hour yesterday" reference, and compares MAE, RMSE, R², and time, with pairwise t-tests. Writes `results/comparacion_algoritmos.csv` and `results/comparacion_algoritmos_ttest.csv`.
+`--modo`, `--id-estacion`, and `--meteo` keep only the runs with that configuration. For each CSV, takes the lowest-MAE run from every algorithm folder in `results/`, adds the "same hour yesterday" reference, and compares MAE, RMSE, R², and time, with pairwise t-tests. Writes `results/comparacion_algoritmos.csv` and `results/comparacion_algoritmos_ttest.csv`.
 
 ### Understanding the results
 
@@ -365,7 +410,8 @@ After rebuilding, run the main experiment from the quick start.
 | `ModuleNotFoundError` | Activate `.venv` and install dependencies using that environment's `python -m pip`. In PyCharm, select the same virtual-environment interpreter. |
 | Missing hourly CSV | Verify `data/processed/`; regenerate the relevant dataset if necessary. |
 | Missing weather file or weather timestamp `KeyError` | Generate `meteo_horario.csv` and verify that it covers every target timestamp. Custom date ranges require matching weather data. |
-| Memory pressure during global training | Use `--jobs 1`. This reduces the number of blocks trained at the same time. |
+| Memory pressure during global training | Use `--jobs 1`. This reduces the number of blocks trained at the same time. Global Ridge needs about 1.7 GB per block. |
+| LSTM is slow | Each global/multivariate block trains on CPU for up to 30 epochs. For a quick check use `--hasta 2022-02-01 --epocas 3`; a larger `--lote` (e.g. 4096) is much faster but changes Manu's settings. |
 | Slow comparison | Begin with a subset of `--modelos` or increase `--folds-cada`; include all folds for the final comparison. |
 | Old comparison results seem unchanged after changing its settings | `antiguo/compare_models.py` caches folds: use a fresh `--resultados` directory. |
 | No test folds for a custom dataset | Provide enough history for the largest input window, training period, and a full 336-hour test block. |
@@ -389,7 +435,7 @@ The project notes propose exploratory charts and maps, event features such as ma
 - [Progress notes for 20 November](docs/seguimiento_20nov.md) — Spanish project context and preliminary findings; check the actual run configuration before citing results.
 - [Proposed final report outline](docs/indice_memoria.md)
 
-To understand the implementation, start with `preprocesamiento/preprocess.py`, then read `ventana()` and `bloques()` in `comun/datos.py`, `_bloque()` and `guardar()` in `comun/experimento.py`, and `entrenar()` in `rna/entrenar.py`. Continue with `preprocesamiento/select_stations.py` and the two comparison scripts.
+To understand the implementation, start with `preprocesamiento/preprocess.py`, then read `ventana()` and `bloques()` in `comun/datos.py`, `_bloque()` and `guardar()` in `comun/experimento.py`, and `entrenar()` in `rna/entrenar.py` (then `ridge/` and `lstm/`, which only change `entrenar()`). Continue with `preprocesamiento/select_stations.py` and the two comparison scripts.
 
 ---
 
@@ -477,7 +523,7 @@ Por ejemplo, para predecir las salidas entre las **09:00 y las 09:59**, un model
 - Las salidas observadas desde las 09:00 de ayer hasta las 08:00 de hoy.
 - Los atributos de calendario de las 09:00 de hoy.
 - La temperatura y la precipitación de la hora objetivo, cuando se utilizan atributos meteorológicos.
-- El identificador de estación, cuando se utiliza un modelo global.
+- Ningún identificador de estación: los modelos globales no saben qué estación predicen, así que sirven para cualquier estación (`--con-id-estacion` lo añade, solo para comparar).
 
 La salida es una estimación numérica no negativa, por ejemplo `3.7` salidas. Las predicciones negativas se sustituyen por cero, pero no se redondean a bicicletas enteras antes de evaluarlas.
 
@@ -506,9 +552,16 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 │   │   └── comparar.py          # Lectura de ejecuciones guardadas y t-test pareado
 │   ├── rna/
 │   │   └── entrenar.py          # Red neuronal (MLP): un estudio por ejecución
+│   ├── ridge/
+│   │   └── entrenar.py          # Regresión Ridge (contraste lineal, del trabajo de Juan)
+│   ├── lstm/
+│   │   └── entrenar.py          # LSTM: multivariante por defecto, también global / por estación (del trabajo de Manu)
 │   ├── comparar_estudios.py     # Compara los estudios de un algoritmo
 │   ├── comparar_algoritmos.py   # Compara el mejor estudio de cada algoritmo
-│   └── antiguo/                 # Comparación anterior todo-en-uno (Ridge, boosting, LSTM...)
+│   └── antiguo/                 # Scripts antiguos, solo de referencia (no los usa el flujo)
+│       ├── compare_models.py    # Comparación anterior todo-en-uno (Ridge, boosting, LSTM...)
+│       ├── ridge_juan/          # Script original de Juan: Ridge frente a MLP (defeat_linearity.py)
+│       └── lstm_manu/           # Scripts originales del LSTM multivariante de Manu
 ├── data/
 │   ├── raw/                   # Viajes originales, calendario y meteorología
 │   ├── processed/             # Series horarias y tablas de estaciones
@@ -519,7 +572,7 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 
 `.gitignore` excluye los archivos originales de viajes, los resultados generados, las cachés intermedias y `.venv/`. Los archivos raíz `mempalace.yaml` y `entities.json` son configuración de una herramienta de memoria local; no intervienen en la predicción.
 
-Cada algoritmo tiene su carpeta (`rna/` ahora; más adelante `lstm/`, `gradient_boosting/`...) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
+Cada algoritmo tiene su carpeta (`rna/`, `ridge/`, `lstm/`; más adelante `gradient_boosting/`...) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
 
 ### Datos y preprocesado
 
@@ -595,15 +648,44 @@ Los grupos se completan en el orden de la tabla, sin repetir estaciones. Para lo
 | `--jobs` | 2 global / todos los núcleos por estación | Bloques entrenados en paralelo |
 | `--hasta` | — | Solo los bloques de test que empiezan antes de esa fecha |
 
-Un **modelo por estación** aprende de las observaciones de una sola estación. Un **modelo global** aprende de todas las estaciones seleccionadas y recibe el identificador de estación mediante codificación one-hot.
+Un **modelo por estación** aprende de las observaciones de una sola estación. Un **modelo global** aprende de todas las estaciones seleccionadas pero, por defecto, **no sabe de qué estación** es cada fila: solo ve el historial y las variables. El proyecto está pensado para funcionar después con cualquier estación, también con las que no se usaron al entrenar, así que el identificador se deja fuera. `--con-id-estacion` lo añade en one-hot, solo para medir cuánto ayudaría; ese modelo queda atado a las estaciones del entrenamiento.
 
 La codificación **one-hot** representa cada categoría en columnas de ceros y unos; por ejemplo, la hora del día ocupa 24 columnas. Los atributos de calendario son hora, día de la semana, mes y festivo. Temperatura y precipitación son atributos numéricos opcionales.
 
 Las entradas se estandarizan con la media y la desviación del entrenamiento de cada bloque; las redes usan parada temprana y semilla `0` (`--semilla`). La parada temprana puede finalizar antes.
 
+#### Regresión Ridge (`ridge/entrenar.py`)
+
+Modelo lineal regularizado con exactamente las mismas entradas, opciones, bloques y ficheros de resultados que la MLP (`--modo global` o `--modo estacion`). Responde a la pregunta de Juan: si Ridge iguala a la MLP, la no linealidad no aporta. La fuerza de la regularización se elige sola entre 0,01, 0,1, 1, 10, 100 y 1000 con validación leave-one-out eficiente (`RidgeCV`). No tiene opciones propias.
+
+#### LSTM (`lstm/entrenar.py`)
+
+Red recurrente que lee las `--ventana` horas anteriores como secuencia; su último estado se junta con las variables de la hora a predecir y una cabeza densa (oculta → ReLU → dropout → salida) da la predicción. Tiene tres modos:
+
+| `--modo` | Qué ve la red para predecir la estación A | Cómo sabe qué estación es | Modelos |
+|---|---|---|---|
+| `multivariante` (por defecto) | El historial de **todas** las estaciones a la vez (cada paso es un vector de 60 salidas); predice todas juntas | Por posición: cada estación tiene su canal de entrada y su neurona de salida | 1 |
+| `global` | Solo el historial de A | No lo sabe (vale para cualquier estación; `--con-id-estacion` añade un one-hot) | 1 (compartido) |
+| `estacion` | Solo el historial de A | — | 1 por estación |
+
+El modo multivariante es el modelo de Manu: puede usar lo que pasa en las demás estaciones, pero solo sirve para el conjunto de estaciones con el que se entrena (igual que el modo `estacion`). Solo `global` vale para cualquier estación. Los otros dos tratan cada fila como una estación, igual que la MLP y Ridge. Los tres usan los mismos bloques y ficheros, así que `comparar_algoritmos.py` los compara directamente.
+
+| Opción | Por defecto | Significado |
+|---|---|---|
+| `--oculta` | 64 | Tamaño del estado de la LSTM (y de la capa densa) |
+| `--capas` | 1 | Capas de LSTM apiladas |
+| `--dropout` | 0,1 | Dropout de la cabeza (y entre capas LSTM si hay varias) |
+| `--epocas` | 30 | Épocas máximas |
+| `--paciencia` | 5 | Para tras estas épocas seguidas sin mejorar el MAE de validación |
+| `--lote` | 256 | Ejemplos por paso de entrenamiento |
+| `--lr`, `--weight-decay` | 1e-3, 1e-5 | Ajustes del optimizador AdamW |
+| `--validacion-h` | 168 | Últimas horas del entrenamiento (de cada estación) que se usan para la parada temprana: cronológicas, no al azar |
+
+Se minimiza la pérdida L1 (MAE), se recorta el gradiente a norma 1 y se queda la época con mejor MAE de validación. El historial y el objetivo se estandarizan con la media y la desviación del entrenamiento (por estación en modo multivariante). Se ejecuta en CPU; `LSTM_DISPOSITIVO=mps` prueba la GPU del Mac. `--jobs` vale por defecto 2 en multivariante, 1 en global y todos los núcleos por estación.
+
 #### Comparación anterior de algoritmos (`antiguo/`)
 
-Hasta que cada algoritmo tenga su carpeta, `antiguo/compare_models.py` mantiene la comparación anterior todo-en-uno. Sus resultados usan el formato antiguo y `comparar_algoritmos.py` no los lee. Acepta estos nombres:
+`antiguo/` guarda scripts antiguos solo como referencia; sus resultados usan el formato antiguo y `comparar_algoritmos.py` no los lee. `ridge_juan/defeat_linearity.py` y `lstm_manu/` son los scripts originales de Juan y de Manu, sustituidos ahora por `ridge/` y `lstm/`. `antiguo/compare_models.py` mantiene la comparación anterior todo-en-uno. Sus resultados usan el formato antiguo y `comparar_algoritmos.py` no los lee. Acepta estos nombres:
 
 | Nombre en el comando | Funcionamiento |
 |---|---|
@@ -632,7 +714,7 @@ Dentro del test, cada predicción utiliza las observaciones reales anteriores a 
 
 `antiguo/compare_models.py` utiliza por defecto uno de cada tres folds (`--folds-cada 3`). Para utilizarlos todos, indica `--folds-cada 1`.
 
-La validación interna para la parada temprana es distinta de la evaluación externa. La MLP y la LSTM utilizan subconjuntos aleatorios de las observaciones de entrenamiento, en lugar de reservar el último segmento cronológico para esa validación interna.
+La validación interna para la parada temprana es distinta de la evaluación externa. La MLP usa un 10 % al azar de las observaciones de entrenamiento; la LSTM (`lstm/`) usa la última semana del entrenamiento, un segmento cronológico; Ridge elige su regularización con leave-one-out sobre el bloque de entrenamiento.
 
 ### Ejecutar experimentos
 
@@ -645,12 +727,20 @@ python src/bicimadness/rna/entrenar.py sel60 --modo estacion # una red por estac
 python src/bicimadness/rna/entrenar.py sel60 --variables hora,dia_semana,mes,festivo --nombre sel60_calendario
 python src/bicimadness/rna/entrenar.py sel60 --meteo anterior
 python src/bicimadness/rna/entrenar.py sel60 --ventana 48 --semanas 26
+
+python src/bicimadness/ridge/entrenar.py sel60                  # Ridge, global
+python src/bicimadness/ridge/entrenar.py sel60 --modo estacion  # Ridge, uno por estación
+
+python src/bicimadness/lstm/entrenar.py sel60                   # LSTM multivariante (modelo de Manu)
+python src/bicimadness/lstm/entrenar.py sel60 --modo global     # LSTM compartida, cualquier estación
+python src/bicimadness/lstm/entrenar.py sel60 --modo estacion   # LSTM, una por estación
 ```
 
-Cada ejecución crea `results/rna/<fecha>_<nombre>/`; nunca se sobrescriben las anteriores. Para ver todas las opciones:
+Cada ejecución crea `results/<algoritmo>/<fecha>_<nombre>/` (`rna`, `ridge`, `lstm`); nunca se sobrescriben las anteriores. Todos aceptan las opciones comunes (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). Para ver todas las opciones:
 
 ```bash
 python src/bicimadness/rna/entrenar.py --help
+python src/bicimadness/lstm/entrenar.py --help
 ```
 
 #### Comparar los estudios de un algoritmo
@@ -666,7 +756,10 @@ Para cada CSV, ordena las ejecuciones por MAE y hace un t-test pareado de cada u
 
 ```bash
 python src/bicimadness/comparar_algoritmos.py
+python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no   # solo los modelos globales
 ```
+
+`--modo`, `--id-estacion` y `--meteo` dejan solo las ejecuciones con esa configuración.
 
 Para cada CSV, coge la ejecución con menor MAE de cada carpeta de algoritmo de `results/`, añade la referencia "misma hora de ayer" y compara MAE, RMSE, R² y tiempo, con t-test por pares. Genera `results/comparacion_algoritmos.csv` y `results/comparacion_algoritmos_ttest.csv`.
 
@@ -756,7 +849,8 @@ Después de regenerar los datos, ejecuta el experimento principal del inicio rá
 | `ModuleNotFoundError` | Activa `.venv` e instala las dependencias con el `python -m pip` de ese entorno. En PyCharm, selecciona el mismo intérprete. |
 | Falta el CSV horario | Comprueba `data/processed/` y regenera el conjunto correspondiente si hace falta. |
 | Falta la meteorología o aparece un `KeyError` de fecha meteorológica | Genera `meteo_horario.csv` y comprueba que cubre todas las horas objetivo. Un periodo personalizado necesita meteorología del mismo periodo. |
-| Falta memoria durante el entrenamiento global | Usa `--jobs 1`. Reduce los bloques que se entrenan a la vez. |
+| Falta memoria durante el entrenamiento global | Usa `--jobs 1`. Reduce los bloques que se entrenan a la vez. Ridge global necesita unos 1,7 GB por bloque. |
+| La LSTM tarda mucho | Cada bloque global o multivariante entrena en CPU hasta 30 épocas. Para una prueba rápida usa `--hasta 2022-02-01 --epocas 3`; un `--lote` mayor (p. ej. 4096) es mucho más rápido, pero cambia los ajustes de Manu. |
 | La comparación tarda demasiado | Empieza con menos `--modelos` o aumenta `--folds-cada`; utiliza todos los folds para la comparación final. |
 | Los resultados antiguos no cambian tras modificar la configuración | `antiguo/compare_models.py` guarda caché de folds: usa una carpeta `--resultados` nueva. |
 | Un conjunto personalizado no produce folds de test | Aporta historial suficiente para la ventana máxima, el periodo de entrenamiento y un bloque completo de test de 336 horas. |
@@ -780,6 +874,6 @@ Las notas del proyecto proponen gráficos y mapas exploratorios, variables de ev
 - [Seguimiento del 20 de noviembre](docs/seguimiento_20nov.md): contexto y resultados preliminares; comprueba la configuración de cada ejecución antes de citarlos.
 - [Índice propuesto de la memoria](docs/indice_memoria.md)
 
-Para entender el código, empieza por `preprocesamiento/preprocess.py`; después lee `ventana()` y `bloques()` en `comun/datos.py`, `_bloque()` y `guardar()` en `comun/experimento.py`, y `entrenar()` en `rna/entrenar.py`. Continúa con `preprocesamiento/select_stations.py` y los dos scripts de comparación.
+Para entender el código, empieza por `preprocesamiento/preprocess.py`; después lee `ventana()` y `bloques()` en `comun/datos.py`, `_bloque()` y `guardar()` en `comun/experimento.py`, y `entrenar()` en `rna/entrenar.py` (después `ridge/` y `lstm/`, que solo cambian `entrenar()`). Continúa con `preprocesamiento/select_stations.py` y los dos scripts de comparación.
 
 [Volver al inicio](#bicimadness) · [Read in English](#english)

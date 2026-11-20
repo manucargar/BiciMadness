@@ -1,9 +1,11 @@
 """Ejecución de un estudio, igual para todos los algoritmos.
 
-Cada algoritmo (rna/, y más adelante lstm/, gradient_boosting/...) solo tiene que dar una función
+Cada algoritmo (rna/, ridge/, lstm/...) solo tiene que dar una función
     entrenar(X, y, args) -> modelo con .predict(X)
+(en modo multivariante, y y predict(X) tienen una columna por estación)
 y llamar a ejecutar(). Aquí se hace todo lo demás: leer el CSV, construir las entradas (ventana +
-variables, y la estación en one-hot si el modo es global), recorrer los bloques de la sliding window,
+variables; en modo global la estación NO entra, para que el modelo valga para cualquier estación,
+salvo con --con-id-estacion), recorrer los bloques de la sliding window,
 medir tiempos, calcular métricas y guardar los resultados en results/<algoritmo>/<fecha>_<nombre>/.
 
 Ficheros de cada ejecución:
@@ -29,23 +31,33 @@ from datetime import datetime
 
 import numpy as np
 from joblib import Parallel, delayed
+from numpy.lib.stride_tricks import sliding_window_view
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 from . import datos as D
 
-COMUNES = {"datos", "modo", "sin_id_estacion", "variables", "meteo", "ventana", "semanas", "nombre", "semilla", "jobs", "hasta", "carpeta"}
+COMUNES = {"datos", "modo", "con_id_estacion", "variables", "meteo", "ventana", "semanas", "nombre", "semilla", "jobs", "hasta", "carpeta"}
 
 
-def argumentos(descripcion):
-    """Parser con los argumentos comunes; cada algoritmo le añade los suyos."""
+def argumentos(descripcion, multivariante=False):
+    """Parser con los argumentos comunes; cada algoritmo le añade los suyos.
+
+    multivariante=True añade --modo multivariante (y lo pone por defecto): un modelo que recibe el historial
+    de TODAS las estaciones a la vez y da una predicción por estación. Solo para algoritmos que lo soportan."""
     p = argparse.ArgumentParser(description=descripcion, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("datos", nargs="?", default="sel60",
                    help=f"CSV de salidas por hora: {', '.join(D.ALIAS)} o una ruta (por defecto sel60)")
-    p.add_argument("--modo", choices=["global", "estacion"], default="global",
-                   help="global = un modelo para todas las estaciones (la estación entra en one-hot); "
-                        "estacion = un modelo por estación (por defecto global)")
-    p.add_argument("--sin-id-estacion", action="store_true",
-                   help="en modo global, no meter la estación en one-hot (la red solo ve historial y variables)")
+    modos = ["global", "estacion"] + (["multivariante"] if multivariante else [])
+    defecto = "multivariante" if multivariante else "global"
+    p.add_argument("--modo", choices=modos, default=defecto,
+                   help="global = un modelo para todas las estaciones (no sabe qué estación es: vale para cualquiera); "
+                        "estacion = un modelo por estación"
+                        + ("; multivariante = un modelo que ve el historial de todas las estaciones a la vez "
+                           "y da todas las predicciones (la estación es su posición, sin one-hot)" if multivariante else "")
+                        + f" (por defecto {defecto})")
+    p.add_argument("--con-id-estacion", action="store_true",
+                   help="en modo global, meter la estación en one-hot (solo para comparar: el modelo queda atado a "
+                        "las estaciones del entrenamiento; por defecto no se mete)")
     p.add_argument("--variables", default="todas",
                    help="variables de la hora a predecir separadas por comas, 'todas' o 'ninguna' "
                         f"(solo el historial). Disponibles: {', '.join(D.VARIABLES)}")
@@ -108,9 +120,27 @@ def _bloque(k, s, series, cal, args, entrenar):
             t_ent, t_pred = t_ent + t1 - t0, t_pred + time.perf_counter() - t1
         return k, preds, t_ent, t_pred
 
+    if args.modo == "multivariante":
+        # fila t = [historial de las n horas anteriores de todas las estaciones (hora a hora), variables de t]
+        # objetivo = salidas de todas las estaciones en t; el modelo devuelve (filas x estaciones)
+        Y = np.stack([series[e] for e in ests], axis=1)
+        sw = sliding_window_view(Y, args.ventana, axis=0)  # sw[i] = Y[i:i+n].T  (estaciones x n)
+
+        def matriz(idx):
+            hist = sw[idx - args.ventana].transpose(0, 2, 1).reshape(len(idx), -1)
+            return np.hstack([hist, cal[idx]]).astype(np.float32), Y[idx]
+
+        Xtr, ytr = matriz(tr)
+        Xte, _ = matriz(te)
+        t0 = time.perf_counter()
+        modelo = entrenar(Xtr, ytr, args)
+        t1 = time.perf_counter()
+        P = np.clip(modelo.predict(Xte), 0, None)
+        return k, {e: P[:, i] for i, e in enumerate(ests)}, t1 - t0, time.perf_counter() - t1
+
     # global: todas las estaciones apiladas en una matriz reservada de una vez (sin copias intermedias)
     n_est, n_tr = len(ests), len(tr)
-    n_id = 0 if args.sin_id_estacion else n_est
+    n_id = n_est if args.con_id_estacion else 0
     columnas = args.ventana + cal.shape[1] + n_id
     Xtr = np.zeros((n_est * n_tr, columnas), dtype=np.float32)
     ytr = np.empty(n_est * n_tr, dtype=np.float32)
@@ -171,10 +201,10 @@ def ejecutar(algoritmo, args, entrenar):
     lista = D.bloques(len(fechas), args.hasta_fecha, fechas)
     if not lista:
         raise SystemExit("no hay ningún bloque de test con esas opciones")
-    jobs = args.jobs or (2 if args.modo == "global" else -1)
+    jobs = args.jobs or (-1 if args.modo == "estacion" else 2)
     print(f"{algoritmo} | {args.ruta_datos.name}: {len(series)} estaciones, {len(lista)} bloques de 2 semanas "
           f"({fechas[lista[0][1]]:%Y-%m-%d} a {fechas[lista[-1][1] + D.TEST_H - 1]:%Y-%m-%d})")
-    print(f"  modo {args.modo}{' sin id de estación' if args.sin_id_estacion else ''}, ventana {args.ventana} h, {args.semanas} semanas, meteo {args.meteo}, "
+    print(f"  modo {args.modo}{' con id de estación' if args.con_id_estacion and args.modo == 'global' else ''}, ventana {args.ventana} h, {args.semanas} semanas, meteo {args.meteo}, "
           f"variables: {', '.join(args.lista_variables) or 'ninguna'}", flush=True)
 
     res = Parallel(n_jobs=jobs, verbose=5)(delayed(_bloque)(k, s, series, cal, args, entrenar) for k, s in lista)
@@ -228,7 +258,7 @@ def guardar(carpeta, algoritmo, nombre, args, inicio, segundos_total, series, fe
     extra = {k: v for k, v in vars(args).items() if k not in COMUNES and k not in ("ruta_datos", "lista_variables", "hasta_fecha")}
     resumen = {
         "algoritmo": algoritmo, "nombre": nombre, "fecha": f"{inicio:%Y-%m-%d %H:%M}", "datos": args.ruta_datos.name,
-        "modo": args.modo, "id_estacion": "no" if args.sin_id_estacion or args.modo == "estacion" else "sí",
+        "modo": args.modo, "id_estacion": "sí" if args.modo == "global" and args.con_id_estacion else "no",
         "variables": "+".join(args.lista_variables) or "ninguna", "meteo": args.meteo,
         "ventana": args.ventana, "semanas": args.semanas, "parametros": json.dumps(extra, ensure_ascii=False),
         "n_estaciones": len(series), "n_bloques": len(lista),

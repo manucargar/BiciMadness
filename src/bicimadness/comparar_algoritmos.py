@@ -7,6 +7,8 @@ T-test pareado de cada par (sobre el MAE de cada estación en cada bloque). Aña
 
 Uso:  python src/bicimadness/comparar_algoritmos.py
       python src/bicimadness/comparar_algoritmos.py --datos sel60
+      python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no
+      (solo los modelos globales que no saben qué estación es: RNA, Ridge y LSTM globales)
 
 Salidas: results/comparacion_algoritmos.csv y results/comparacion_algoritmos_ttest.csv
 """
@@ -25,13 +27,22 @@ from bicimadness.comun.datos import RESULTADOS  # noqa: E402
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datos", help="solo este CSV (sel60, top50...)")
+    p.add_argument("--modo", choices=["global", "estacion", "multivariante"], help="solo las ejecuciones de este modo")
+    p.add_argument("--id-estacion", choices=["sí", "si", "no"], help="solo las ejecuciones con (sí) o sin (no) id de estación")
+    p.add_argument("--meteo", choices=["actual", "anterior"], help="solo las ejecuciones con esta meteorología")
     args = p.parse_args()
+    if args.id_estacion == "si":
+        args.id_estacion = "sí"
+
+    def vale(e):
+        return ((not args.modo or e["modo"] == args.modo) and (not args.id_estacion or e["id_estacion"] == args.id_estacion)
+                and (not args.meteo or e.get("meteo") == args.meteo))
 
     mejores = defaultdict(dict)  # datos -> algoritmo -> ejecución con menor MAE
     for alg in C.algoritmos():
         for e in C.ejecuciones(alg):
             d = C.corto(e["datos"])
-            if (not args.datos or d == args.datos) and (alg not in mejores[d] or e["mae"] < mejores[d][alg]["mae"]):
+            if (not args.datos or d == args.datos) and vale(e) and (alg not in mejores[d] or e["mae"] < mejores[d][alg]["mae"]):
                 mejores[d][alg] = e
     if not mejores:
         raise SystemExit("no hay ejecuciones terminadas en results/<algoritmo>/")

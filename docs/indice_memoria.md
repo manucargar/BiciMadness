@@ -44,7 +44,9 @@ Entrega: 13 de diciembre (memoria + código). Entre corchetes, de dónde salen l
 5.3 Modelos
 - Referencias: misma hora del día anterior, misma hora de la semana anterior, media histórica
 - MLP por estación (32-16) frente a MLP global (64-32) con la estación como atributo nominal
-- Otros algoritmos: regresión lineal (Ridge), gradient boosting, LSTM
+- Regresión lineal Ridge con las mismas entradas que la MLP, global y por estación (contraste de linealidad) [`ridge/`]
+- LSTM: multivariante (ve las 60 estaciones a la vez), global con one-hot y por estación [`lstm/`]
+- Otros algoritmos: gradient boosting
 5.4 Validación: sliding window (52 semanas de entrenamiento, 2 de test, 29 folds; mismos folds para todos)
 5.5 Métricas (MAE, RMSE, R²) y T-test pareado sobre el MAE por (estación, fold)
 
@@ -54,13 +56,13 @@ Entrega: 13 de diciembre (memoria + código). Entre corchetes, de dónde salen l
 6.3 Red por estación frente a red global: MAE 1,425 → 1,388; sin el atributo estación, 1,409 [top 50]
 6.4 Variables exógenas: meteorología (significativa pero pequeña: R² 0,298 → 0,308 en las 60) [sel60_meteo]
 6.5 Resultados por grupo de estaciones: demanda, ubicación y dificultad [`analyze_groups.py`]
-6.6 Comparación de algoritmos: MLP ≈ LSTM > gradient boosting > regresión > media histórica > referencias, con tiempos de entrenamiento [`compare_models.py`]
+6.6 Comparación de algoritmos: MLP ≈ LSTM > gradient boosting > regresión > media histórica > referencias, con tiempos de entrenamiento [`compare_models.py`; rehacer con `comparar_algoritmos.py` sobre `rna/`, `ridge/` y `lstm/`]
 6.7 Análisis del error por hora del día y por estación
 
 ## 7. Discusión
 7.1 Qué factor explica más el error: la demanda; la ubicación apenas influye
 7.2 La red global aprovecha los datos de todas las estaciones
-7.3 La LSTM no mejora a la MLP con una ventana de 24 h y cuesta el doble de entrenar
+7.3 La LSTM no mejora a la MLP con una ventana de 24 h y cuesta el doble de entrenar (comprobar con la LSTM multivariante)
 7.4 Utilidad para la organización: planificar la redistribución hora a hora
 
 ## 8. Limitaciones y trabajo futuro
