@@ -322,7 +322,7 @@ python src/bicimadness/comparar_algoritmos.py
 python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no   # only the global models
 ```
 
-`--modo`, `--id-estacion`, and `--meteo` keep only the runs with that configuration. For each CSV, takes the lowest-MAE run from every algorithm folder in `results/`, adds the "same hour yesterday" reference, and compares MAE, RMSE, R², and time, with pairwise t-tests. Writes `results/comparacion_algoritmos.csv` and `results/comparacion_algoritmos_ttest.csv`.
+`--modo` (one or several, e.g. `--modo global multivariante`), `--id-estacion`, and `--meteo` keep only the runs with that configuration. For each CSV, takes the lowest-MAE run from every algorithm folder in `results/`, adds the "same hour yesterday" reference, and compares MAE, RMSE, R², and time, with pairwise t-tests. Writes `results/comparacion_algoritmos.csv` and `results/comparacion_algoritmos_ttest.csv`.
 
 ### Understanding the results
 
@@ -759,7 +759,7 @@ python src/bicimadness/comparar_algoritmos.py
 python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no   # solo los modelos globales
 ```
 
-`--modo`, `--id-estacion` y `--meteo` dejan solo las ejecuciones con esa configuración.
+`--modo` (uno o varios, p. ej. `--modo global multivariante`), `--id-estacion` y `--meteo` dejan solo las ejecuciones con esa configuración.
 
 Para cada CSV, coge la ejecución con menor MAE de cada carpeta de algoritmo de `results/`, añade la referencia "misma hora de ayer" y compara MAE, RMSE, R² y tiempo, con t-test por pares. Genera `results/comparacion_algoritmos.csv` y `results/comparacion_algoritmos_ttest.csv`.
 

@@ -9,6 +9,8 @@ Uso:  python src/bicimadness/comparar_algoritmos.py
       python src/bicimadness/comparar_algoritmos.py --datos sel60
       python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global --id-estacion no
       (solo los modelos globales que no saben qué estación es: RNA, Ridge y LSTM globales)
+      python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global multivariante --id-estacion no
+      (RNA y Ridge globales frente al LSTM multivariante)
 
 Salidas: results/comparacion_algoritmos.csv y results/comparacion_algoritmos_ttest.csv
 """
@@ -27,7 +29,8 @@ from bicimadness.comun.datos import RESULTADOS  # noqa: E402
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--datos", help="solo este CSV (sel60, top50...)")
-    p.add_argument("--modo", choices=["global", "estacion", "multivariante"], help="solo las ejecuciones de este modo")
+    p.add_argument("--modo", nargs="+", choices=["global", "estacion", "multivariante"],
+                   help="solo las ejecuciones de estos modos (uno o varios)")
     p.add_argument("--id-estacion", choices=["sí", "si", "no"], help="solo las ejecuciones con (sí) o sin (no) id de estación")
     p.add_argument("--meteo", choices=["actual", "anterior"], help="solo las ejecuciones con esta meteorología")
     args = p.parse_args()
@@ -35,7 +38,7 @@ def main():
         args.id_estacion = "sí"
 
     def vale(e):
-        return ((not args.modo or e["modo"] == args.modo) and (not args.id_estacion or e["id_estacion"] == args.id_estacion)
+        return ((not args.modo or e["modo"] in args.modo) and (not args.id_estacion or e["id_estacion"] == args.id_estacion)
                 and (not args.meteo or e.get("meteo") == args.meteo))
 
     mejores = defaultdict(dict)  # datos -> algoritmo -> ejecución con menor MAE
