@@ -1,14 +1,17 @@
 """Ejecución de un estudio, igual para todos los algoritmos.
 
 Cada algoritmo (rna/, y más adelante lstm/, gradient_boosting/...) solo tiene que dar una función
-    entrenar(X, y, args) -> modelo con .predict(X)
+    entrenar(X, y, args, val) -> modelo con .predict(X)
+(val: máscara booleana de las filas de validación = última semana cronológica de cada estación; las filas
+están ordenadas por estación y, dentro de cada una, por fecha. El algoritmo decide si la usa)
 y llamar a ejecutar(). Aquí se hace todo lo demás: leer el CSV, construir las entradas (ventana +
 variables, y la estación en one-hot si el modo es global), recorrer los bloques de la sliding window,
 medir tiempos, calcular métricas y guardar los resultados en results/<algoritmo>/<fecha>_<nombre>/.
 
 Ficheros de cada ejecución:
   config.json            argumentos, fechas, commit de git y versiones: qué se ejecutó exactamente
-  resumen.csv            MAE, RMSE, R² medios (y los de la referencia "misma hora de ayer") y tiempos
+  resumen.csv            MAE, RMSE, R² medios y agregados (y los de la referencia "misma hora de ayer") y tiempos
+  metricas_por_bloque.csv MAE, RMSE, R² de cada bloque (todas las estaciones juntas)
   resultados_folds.csv   métricas de cada estación en cada bloque
   tiempos.csv            segundos de entrenamiento y de predicción de cada bloque
   error_por_estacion.csv error medio de cada estación
@@ -75,6 +78,16 @@ def _validar(args):
     args.hasta_fecha = datetime.strptime(args.hasta, "%Y-%m-%d") if args.hasta else None
 
 
+class ModeloEscalado:
+    """Un modelo con la estandarización de las entradas calculada al entrenar (media y desviación del bloque)."""
+
+    def __init__(self, media, desv, modelo):
+        self.media, self.desv, self.modelo = media, desv, modelo
+
+    def predict(self, X):
+        return self.modelo.predict((X - self.media) / self.desv)
+
+
 def escalar_en_sitio(X, trozo=200_000):
     """Estandariza X (media 0, desviación 1 por columna) sin copiarla; -> (media, desviación).
 
@@ -102,7 +115,7 @@ def _bloque(k, s, series, cal, args, entrenar):
             Xtr, ytr = D.ventana(series[e], cal, args.ventana, tr)
             Xte, _ = D.ventana(series[e], cal, args.ventana, te)
             t0 = time.perf_counter()
-            modelo = entrenar(Xtr.astype(np.float32), ytr, args)
+            modelo = entrenar(Xtr.astype(np.float32), ytr, args, np.arange(len(ytr)) >= len(ytr) - D.VAL_H)
             t1 = time.perf_counter()
             preds[e] = np.clip(modelo.predict(Xte.astype(np.float32)), 0, None)  # no hay salidas negativas
             t_ent, t_pred = t_ent + t1 - t0, t_pred + time.perf_counter() - t1
@@ -127,11 +140,16 @@ def _bloque(k, s, series, cal, args, entrenar):
         if n_id:
             Xte[e][:, X.shape[1] + i] = 1
     t0 = time.perf_counter()
-    modelo = entrenar(Xtr, ytr, args)
+    modelo = entrenar(Xtr, ytr, args, np.tile(np.arange(n_tr) >= n_tr - D.VAL_H, n_est))
     t1 = time.perf_counter()
     del Xtr
     preds = {e: np.clip(modelo.predict(Xte[e]), 0, None) for e in ests}
     return k, preds, t1 - t0, time.perf_counter() - t1
+
+
+def partir(X, y, val):
+    """(X entrenamiento, y entrenamiento, X validación, y validación) según la máscara `val`."""
+    return X[~val], y[~val], X[val], y[val]
 
 
 def _metricas(real, pred):
@@ -189,6 +207,8 @@ def guardar(carpeta, algoritmo, nombre, args, inicio, segundos_total, series, fe
     horas = np.array([f.hour for f in fechas])
 
     folds, por_hora, por_hora_ref, tiempos = [], defaultdict(list), defaultdict(list), []
+    por_bloque = []  # [bloque, inicio, MAE, RMSE, R² agregados de todas las estaciones en ese bloque]
+    todo_real, todo_pred = [], []
     with gzip.open(carpeta / "predicciones.csv.gz", "wt", newline="", encoding="utf-8") as fz:
         wz = csv.writer(fz)
         wz.writerow(["fecha_hora", "id_estacion", "bloque", "real", "prediccion"])
@@ -196,6 +216,11 @@ def guardar(carpeta, algoritmo, nombre, args, inicio, segundos_total, series, fe
             s = inicio_de[k]
             te = np.arange(s, s + D.TEST_H)
             tiempos.append([k, f"{fechas[s]:%Y-%m-%d}", round(t_ent, 2), round(t_pred, 2)])
+            r_b = np.concatenate([series[e][te] for e in series])
+            p_b = np.concatenate([preds[e] for e in series])
+            todo_real.append(r_b)
+            todo_pred.append(p_b)
+            por_bloque.append([k, f"{fechas[s]:%Y-%m-%d}", *(round(v, 4) for v in _metricas(r_b, p_b))])
             for e, y in series.items():
                 real, pred, ref = y[te], preds[e], y[te - 24]  # referencia: lo que salió ayer a esa hora
                 folds.append([k, f"{fechas[s]:%Y-%m-%d}", e, *_metricas(real, pred), *_metricas(real, ref),
@@ -210,6 +235,8 @@ def guardar(carpeta, algoritmo, nombre, args, inicio, segundos_total, series, fe
            "r2_referencia", "salidas_hora"]
     _escribir(carpeta / "resultados_folds.csv", cab, [[*f[:3], *(round(v, 4) for v in f[3:])] for f in folds])
     _escribir(carpeta / "tiempos.csv", ["bloque", "inicio_test", "segundos_entreno", "segundos_prediccion"], tiempos)
+    _escribir(carpeta / "metricas_por_bloque.csv", ["bloque", "inicio_test", "mae", "rmse", "r2"], por_bloque)
+    agregadas = _metricas(np.concatenate(todo_real), np.concatenate(todo_pred))  # todas las predicciones juntas
     m = np.array([f[3:] for f in folds], dtype=float)  # columnas de cab[3:]
 
     por_est = defaultdict(list)
@@ -233,6 +260,8 @@ def guardar(carpeta, algoritmo, nombre, args, inicio, segundos_total, series, fe
         "ventana": args.ventana, "semanas": args.semanas, "parametros": json.dumps(extra, ensure_ascii=False),
         "n_estaciones": len(series), "n_bloques": len(lista),
         "mae": round(medias[0], 4), "rmse": round(medias[1], 4), "r2": round(medias[2], 4),
+        # mismas métricas sobre todas las predicciones juntas (R² con la media global del test)
+        "mae_agregado": round(agregadas[0], 4), "rmse_agregado": round(agregadas[1], 4), "r2_agregado": round(agregadas[2], 4),
         "mae_referencia": round(medias[3], 4), "rmse_referencia": round(medias[4], 4), "r2_referencia": round(medias[5], 4),
         "segundos_total": round(segundos_total, 1),
         "segundos_entreno_por_bloque": round(float(t[:, 0].mean()), 2),

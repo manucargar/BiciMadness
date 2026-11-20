@@ -18,12 +18,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/, para importar bicimadness
 
+import copy  # noqa: E402
+
+import numpy as np  # noqa: E402
 from sklearn.neural_network import MLPRegressor  # noqa: E402
 
-from bicimadness.comun.experimento import argumentos, ejecutar, escalar_en_sitio  # noqa: E402
+from bicimadness.comun.experimento import argumentos, ejecutar, escalar_en_sitio, partir  # noqa: E402
 
 OCULTAS = {"global": [64, 32], "estacion": [32, 16]}  # la red global ve muchos más datos -> algo más grande
 ITERACIONES = {"global": 200, "estacion": 500}
+PACIENCIA = 10  # épocas seguidas sin mejorar en validación
 
 
 class RedEscalada:
@@ -36,11 +40,28 @@ class RedEscalada:
         return self.red.predict((X - self.media) / self.desv)
 
 
-def entrenar(X, y, args):
+def entrenar(X, y, args, val):
     media, desv = escalar_en_sitio(X)  # X ya no se usa después: se estandariza sin copiarla
-    red = MLPRegressor(hidden_layer_sizes=tuple(args.ocultas or OCULTAS[args.modo]), early_stopping=True,
-                       max_iter=args.iteraciones or ITERACIONES[args.modo], random_state=args.semilla)
-    return RedEscalada(media, desv, red.fit(X, y))
+    capas, max_iter = tuple(args.ocultas or OCULTAS[args.modo]), args.iteraciones or ITERACIONES[args.modo]
+    if args.validacion == "aleatoria":  # forma anterior: 10 % de filas al azar (las ventanas solapadas se cuelan en la validación)
+        red = MLPRegressor(hidden_layer_sizes=capas, early_stopping=True, max_iter=max_iter, random_state=args.semilla)
+        return RedEscalada(media, desv, red.fit(X, y))
+    # cronológica: se entrena con todo menos la última semana, y se para cuando el error en esa semana deja de mejorar
+    Xa, ya, Xv, yv = partir(X, y, val)
+    red = MLPRegressor(hidden_layer_sizes=capas, max_iter=1, random_state=args.semilla)
+    mejor, mejor_estado, sin_mejora = np.inf, None, 0
+    for _ in range(max_iter):
+        red.partial_fit(Xa, ya)  # una época
+        error = float(np.mean((red.predict(Xv) - yv) ** 2))
+        if error < mejor - 1e-4:
+            mejor, sin_mejora = error, 0
+            mejor_estado = copy.deepcopy((red.coefs_, red.intercepts_))
+        else:
+            sin_mejora += 1
+            if sin_mejora == PACIENCIA:
+                break
+    red.coefs_, red.intercepts_ = mejor_estado
+    return RedEscalada(media, desv, red)
 
 
 def main():
@@ -48,6 +69,8 @@ def main():
     p.add_argument("--ocultas", type=int, nargs="+",
                    help="neuronas de cada capa oculta (por defecto 64 32 en modo global y 32 16 por estación)")
     p.add_argument("--iteraciones", type=int, help="épocas máximas (por defecto 200 global, 500 por estación)")
+    p.add_argument("--validacion", choices=["cronologica", "aleatoria"], default="cronologica",
+                   help="validación para parar el entrenamiento: última semana del entrenamiento (por defecto) o 10 %% al azar")
     args = p.parse_args()
     args.ocultas = args.ocultas or OCULTAS[args.modo]  # se guarda en config.json el valor usado
     args.iteraciones = args.iteraciones or ITERACIONES[args.modo]

@@ -2,5 +2,5 @@ numpy==2.2.6
 scikit-learn==1.7.2
 scipy==1.15.3
 joblib==1.6.0
-torch>=2.2  # solo para la LSTM de src/bicimadness/antiguo/compare_models.py
+torch>=2.2  # solo para la LSTM (src/bicimadness/lstm/entrenar.py)
 tzdata  # zona horaria Europe/Madrid en Windows (en Mac/Linux ya viene con el sistema)

@@ -39,6 +39,7 @@ METEOROLOGICAS = {"temperatura", "precipitacion"}
 TEST_H = 2 * 7 * 24          # 2 semanas por bloque
 MAX_VENTANA = 7 * 24         # hasta 1 semana de historial
 MAX_SEMANAS = 52             # hasta 1 año de entrenamiento
+VAL_H = 7 * 24               # validación interna (parada temprana, elegir alpha): última semana de cada entrenamiento
 INICIO_TEST = MAX_VENTANA + MAX_SEMANAS * 7 * 24
 # Fácil/difícil se clasifica con los bloques que empiezan antes de esta fecha; errores_por_grupo.csv
 # da también el error de los bloques posteriores, que no se usaron para clasificar.
