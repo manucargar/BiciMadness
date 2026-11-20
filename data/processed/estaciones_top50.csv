@@ -1,0 +1,51 @@
+columna,id_estacion,nombre,salidas_totales
+est_43,43,Plaza de la Cebada,86838
+est_57,57,Plaza de Lavapiés,81548
+est_208,208,Quevedo,65083
+est_175,175,Segovia 45,64238
+est_90,90,Puerta de Madrid,62319
+est_220,220,Marqués de Vadillo,61668
+est_49,49,Puerta de Toledo,57742
+est_45,45,Antón Martín,57737
+est_132,132,Paseo de la Florida,57545
+est_64,64,Plaza de la Independencia,53824
+est_149,149,Glorieta de los Cuatro Caminos,53777
+est_41,41,Plaza de San Francisco,53527
+est_13,13,San Hermenegildo,53422
+est_9,9,Alonso Martínez,52453
+est_129,129,Santa María de la Cabeza,52242
+est_58,58,Barceló,51428
+est_46,46,Santa Isabel,50539
+est_254,254,Santa Engracia 87,49998
+est_62,62,Augusto Figueroa,49801
+est_19,19,Plaza de Pedro Zerolo,49774
+est_83,83,Puerta de Granada,49142
+est_169,169,Manuel Silvela,48887
+est_59,59,Plaza de San Ildefonso,48556
+est_224,224,Puerta del Ángel,48284
+est_135,135,Entrada Matadero,47714
+est_163,163,General Álvarez de Castro,47230
+est_204,204,Prosperidad,47017
+est_52,52,Embajadores 2,46836
+est_189,189,Retiro-Ibiza,45857
+est_38,38,Jacinto Benavente,45780
+est_170,170,Juan Bravo 50,45467
+est_30,30,Plaza de las Salesas,45183
+est_168,168,Fernando el Católico,44818
+est_145,145,Orense 12,43803
+est_79,79,Menéndez Pelayo,43516
+est_42,42,Plaza de los Carros,42780
+est_157,157,Santa Engracia 127,41471
+est_78,78,Puerta del Pacífico,40509
+est_17,17,San Bernardo,39968
+est_131,131,Guzmán el Bueno,39243
+est_6,6,Fuencarral,38990
+est_48,48,Plaza de Nelson Mandela,38829
+est_244,244,Paseo Imperial,38700
+est_65,65,Narváez,38554
+est_56,56,Plaza de Santa Ana,38544
+est_53,53,Casa Encendida,38460
+est_161,161,José Abascal,38344
+est_164,164,General Martínez Campos,38112
+est_128,128,Palos de la Frontera,38102
+est_74,74,Puerta del Doce de Octubre,37915
