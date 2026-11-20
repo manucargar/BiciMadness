@@ -23,6 +23,7 @@ This repository contains command-line experiments and CSV reports. It does not c
 - [Understanding the results](#understanding-the-results)
 - [Rebuilding the datasets](#rebuilding-the-datasets)
 - [Troubleshooting](#troubleshooting)
+- [LSTM experiment](#lstm-experiment)
 - [Limitations and future work](#limitations-and-future-work)
 - [Further reading](#further-reading)
 
@@ -115,6 +116,7 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 │   │   └── comparar.py          # Reads saved runs; paired t-test
 │   ├── rna/
 │   │   └── entrenar.py          # Neural network (MLP): one study per run
+│   ├── lstm/                    # LSTM experiment: prepare data, train, analyse (self-contained)
 │   ├── comparar_estudios.py     # Compare the studies of one algorithm
 │   ├── comparar_algoritmos.py   # Compare the best study of each algorithm
 │   └── antiguo/                 # Previous all-in-one comparison (Ridge, boosting, LSTM...)
@@ -128,7 +130,7 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 
 Raw trip archives, generated results, intermediate caches, and `.venv/` are excluded by `.gitignore`. The root-level `mempalace.yaml` and `entities.json` are local memory-tool configuration, not inputs to the forecasting pipeline.
 
-Each algorithm has its own folder (`rna/` now; `lstm/`, `gradient_boosting/`... later) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
+Each algorithm has its own folder (`rna/` now; `gradient_boosting/`... later). The `lstm/` folder is a self-contained experiment with its own scripts (see [LSTM experiment](#lstm-experiment)), not yet ported to `comun/experimento.py`. Following this pattern with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
 
 ### Data and preprocessing
 
@@ -371,6 +373,23 @@ After rebuilding, run the main experiment from the quick start.
 | No test folds for a custom dataset | Provide enough history for the largest input window, training period, and a full 336-hour test block. |
 | `ConvergenceWarning` | The optimizer reached its iteration limit. Review the affected experiment before relying on its results; CLI hidden-layer settings do not adjust that limit. |
 
+### LSTM experiment
+
+The `src/bicimadness/lstm/` folder holds a separate global LSTM for the 60 selected stations, with its own scripts. The detailed Spanish instructions are in [Experimento LSTM](#experimento-lstm-carpeta-srcbicimadnesslstm); the main commands, run from the project root, are:
+
+```bash
+# 1. Build the sequences (writes data/processed/lstm_model_data.npz and its JSON manifest)
+python src/bicimadness/lstm/preparar_lstm.py --ventana 24 --ventanas 24 48 168 --semanas 26 52
+
+# 2. Train the global LSTM (omit --folds to run all 29 two-week test blocks)
+python src/bicimadness/lstm/modelo_lstm_60.py --ventanas 24 --semanas 52 --folds 0
+
+# 3. Summarise results by station, hour, station group, and day type
+python src/bicimadness/lstm/analizar_lstm.py --resultados results/lstm_selected_60
+```
+
+`lstm/rna_estaciones_sel60_adaptada.py` runs the reference global MLP on the same folds so both models can be compared. Results are written to `results/lstm_selected_60/`.
+
 ### Limitations and future work
 
 - **Target-hour weather:** with `--meteo actual` (default) the model uses the observed weather of the predicted hour, which stands for a perfect one-hour-ahead forecast. `--meteo anterior` uses only the previous hour's weather; the difference between both measures the value of a good forecast.
@@ -416,6 +435,7 @@ El repositorio contiene experimentos ejecutables desde la terminal e informes CS
 - [Interpretar los resultados](#interpretar-los-resultados)
 - [Regenerar los datos](#regenerar-los-datos)
 - [Solución de problemas](#solución-de-problemas)
+- [Experimento LSTM](#experimento-lstm-carpeta-srcbicimadnesslstm)
 - [Limitaciones y trabajo futuro](#limitaciones-y-trabajo-futuro)
 - [Documentación adicional](#documentación-adicional)
 
@@ -506,6 +526,7 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 │   │   └── comparar.py          # Lectura de ejecuciones guardadas y t-test pareado
 │   ├── rna/
 │   │   └── entrenar.py          # Red neuronal (MLP): un estudio por ejecución
+│   ├── lstm/                    # Experimento LSTM: preparar datos, entrenar y analizar (independiente)
 │   ├── comparar_estudios.py     # Compara los estudios de un algoritmo
 │   ├── comparar_algoritmos.py   # Compara el mejor estudio de cada algoritmo
 │   └── antiguo/                 # Comparación anterior todo-en-uno (Ridge, boosting, LSTM...)
@@ -519,7 +540,7 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 
 `.gitignore` excluye los archivos originales de viajes, los resultados generados, las cachés intermedias y `.venv/`. Los archivos raíz `mempalace.yaml` y `entities.json` son configuración de una herramienta de memoria local; no intervienen en la predicción.
 
-Cada algoritmo tiene su carpeta (`rna/` ahora; más adelante `lstm/`, `gradient_boosting/`...) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
+Cada algoritmo tiene su carpeta (`rna/` ahora; más adelante `gradient_boosting/`...). La carpeta `lstm/` es un experimento independiente con sus propios scripts (véase [Experimento LSTM](#experimento-lstm-carpeta-srcbicimadnesslstm)), aún no adaptado a `comun/experimento.py`. Siguiendo este patrón con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
 
 ### Datos y preprocesado
 
@@ -761,6 +782,70 @@ Después de regenerar los datos, ejecuta el experimento principal del inicio rá
 | Los resultados antiguos no cambian tras modificar la configuración | `antiguo/compare_models.py` guarda caché de folds: usa una carpeta `--resultados` nueva. |
 | Un conjunto personalizado no produce folds de test | Aporta historial suficiente para la ventana máxima, el periodo de entrenamiento y un bloque completo de test de 336 horas. |
 | `ConvergenceWarning` | El optimizador ha alcanzado el límite de iteraciones. Revisa el experimento antes de basarte en sus resultados; cambiar las capas ocultas desde el comando no cambia ese límite. |
+
+### Experimento LSTM (carpeta `src/bicimadness/lstm/`)
+
+#### Preparar los datos para el LSTM
+
+La red LSTM de las 60 estaciones usa la misma meteorología que los modelos MLP existentes:
+`data/raw/meteo_horario.csv`, con temperatura y precipitación. El preprocesado crea una matriz
+horaria de 60 objetivos y añade calendario cíclico y festivo:
+
+```powershell
+python src/bicimadness/lstm/preparar_lstm.py --ventana 24 --ventanas 24 48 168 --semanas 26 52
+```
+
+Genera `data/processed/lstm_model_data.npz` y su manifiesto JSON. Las secuencias contienen las
+salidas de las 60 estaciones en las horas anteriores y las variables exógenas de la hora objetivo.
+El manifiesto documenta las ventanas, los entrenamientos de 26/52 semanas y los 29 bloques de test
+de dos semanas. Los escaladores se ajustan únicamente con cada intervalo de entrenamiento, antes
+de la validación interna y del test.
+
+#### Entrenar el LSTM global
+
+El modelo base procesa la ventana de salidas y añade temperatura, precipitación y calendario a la
+representación final para predecir las próximas salidas de las 60 estaciones:
+
+```powershell
+python src/bicimadness/lstm/modelo_lstm_60.py --ventanas 24 --semanas 52 --folds 0
+```
+
+Sin `--folds`, se ejecutan los 29 bloques. Los resultados de cada ejecución se guardan en
+`results/lstm_selected_60/`, junto con la configuración, el historial de entrenamiento y las
+métricas MAE/RMSE/R² por fold.
+
+Después de guardar al menos una predicción por configuración, puede resumirse la comparación:
+
+```powershell
+python src/bicimadness/lstm/analizar_lstm.py --resultados results/lstm_selected_60
+```
+
+El análisis genera métricas de referencia y LSTM por estación, hora, grupo de estación
+(demanda alta/baja, céntrica/afueras, fácil/difícil) y tipo de día (entre semana/fin de semana),
+además de la prueba pareada por fold y un diagnóstico de las estaciones y folds con menor/mayor
+MAE.
+
+Para una comparación reducida en tres folds representativos (0, 14 y 28), manteniendo 52 semanas
+de entrenamiento, ejecutar:
+
+```powershell
+python src/bicimadness/lstm/modelo_lstm_60.py --ventanas 24 48 --ancla-folds 168 --semanas 52 --meteorologia con --folds 0 14 28 --resultados results/lstm_ablaciones_reducida
+python src/bicimadness/lstm/modelo_lstm_60.py --ventanas 24 --ancla-folds 168 --semanas 52 --meteorologia sin --folds 0 14 28 --resultados results/lstm_ablaciones_reducida
+python src/bicimadness/lstm/analizar_lstm.py --resultados results/lstm_ablaciones_reducida --rna-folds results/mlp_lstm_folds/resultados_folds.csv
+```
+
+La opción `sin` elimina temperatura y precipitación, pero conserva las variables de calendario.
+La adaptación de la MLP para comparar los mismos folds está en `lstm/rna_estaciones_sel60_adaptada.py`
+(el script original de las 60 estaciones fue sustituido por `rna/entrenar.py`).
+Para ejecutar la MLP global de referencia sobre los mismos folds:
+
+```powershell
+python src/bicimadness/lstm/rna_estaciones_sel60_adaptada.py --ventanas 24 --semanas 52 --ancla-folds 168 --folds 0 14 28 --atributos hora,dia_semana,mes,festivo,temperatura,precipitacion --modelo global --jobs 1 --jobs-estaciones 1 --resultados results/mlp_lstm_folds
+```
+
+Las ejecuciones reducidas comparan ventanas 24/48 horas y el efecto de temperatura/precipitación;
+la ventana de 168 horas se omite de esta corrida para limitar el tiempo y memoria del entrenamiento
+en CPU. Puede añadirse ejecutando el mismo comando LSTM con `--ventanas 168 --meteorologia con`.
 
 ### Limitaciones y trabajo futuro
 

@@ -23,3 +23,6 @@ data/raw/meteo/
 # caché de count_stations.py y muestra de la primera ronda (se regeneran)
 data/cache/
 data/processed/salidas_por_hora_muestra.csv
+
+# caches de Python
+*.py[cod]
