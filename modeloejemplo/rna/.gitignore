@@ -1,0 +1,5 @@
+modelo.joblib
+config.json
+evaluacion_mes/
+consultas/
+__pycache__/

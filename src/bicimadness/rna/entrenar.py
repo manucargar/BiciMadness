@@ -18,9 +18,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))  # src/, para importar bicimadness
 
+import copy
+
+import numpy as np
 from sklearn.neural_network import MLPRegressor  # noqa: E402
 
-from bicimadness.comun.experimento import argumentos, ejecutar, escalar_en_sitio  # noqa: E402
+from bicimadness.comun.experimento import (
+    argumentos, ejecutar, escalar_en_sitio, opciones_validacion, validacion_cronologica,
+)  # noqa: E402
 
 OCULTAS = {"global": [64, 32], "estacion": [32, 16]}  # la red global ve muchos más datos -> algo más grande
 ITERACIONES = {"global": 200, "estacion": 500}
@@ -37,10 +42,24 @@ class RedEscalada:
 
 
 def entrenar(X, y, args):
-    media, desv = escalar_en_sitio(X)  # X ya no se usa después: se estandariza sin copiarla
-    red = MLPRegressor(hidden_layer_sizes=tuple(args.ocultas or OCULTAS[args.modo]), early_stopping=True,
-                       max_iter=args.iteraciones or ITERACIONES[args.modo], random_state=args.semilla)
-    return RedEscalada(media, desv, red.fit(X, y))
+    val = validacion_cronologica(len(y), args)
+    media, desv = escalar_en_sitio(X, entrenamiento=~val)
+    red = MLPRegressor(hidden_layer_sizes=tuple(args.ocultas or OCULTAS[args.modo]),
+                       max_iter=1, random_state=args.semilla)
+    Xa, ya, Xv, yv = X[~val], y[~val], X[val], y[val]
+    mejor, estado, sin_mejora = np.inf, None, 0
+    for _ in range(args.iteraciones or ITERACIONES[args.modo]):
+        red.partial_fit(Xa, ya)
+        error = float(np.mean((red.predict(Xv) - yv) ** 2))
+        if error < mejor - 1e-4:
+            mejor, sin_mejora = error, 0
+            estado = copy.deepcopy((red.coefs_, red.intercepts_))
+        else:
+            sin_mejora += 1
+            if sin_mejora >= 10:
+                break
+    red.coefs_, red.intercepts_ = estado
+    return RedEscalada(media, desv, red)
 
 
 def main():
@@ -48,7 +67,10 @@ def main():
     p.add_argument("--ocultas", type=int, nargs="+",
                    help="neuronas de cada capa oculta (por defecto 64 32 en modo global y 32 16 por estación)")
     p.add_argument("--iteraciones", type=int, help="épocas máximas (por defecto 200 global, 500 por estación)")
+    opciones_validacion(p)
     args = p.parse_args()
+    if args.iteraciones is not None and args.iteraciones < 1:
+        p.error("--iteraciones debe ser al menos 1")
     args.ocultas = args.ocultas or OCULTAS[args.modo]  # se guarda en config.json el valor usado
     args.iteraciones = args.iteraciones or ITERACIONES[args.modo]
     ejecutar("rna", args, entrenar)

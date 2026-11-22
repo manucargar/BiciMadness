@@ -135,7 +135,7 @@ The 24-hour **input window** is different from the **forecast horizon**: the cur
 
 Raw trip archives, generated results, intermediate caches, and `.venv/` are excluded by `.gitignore`. The root-level `mempalace.yaml` and `entities.json` are local memory-tool configuration, not inputs to the forecasting pipeline.
 
-Each algorithm has its own folder (`rna/`, `ridge/`, `lstm/`; `gradient_boosting/`... later) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
+Each algorithm has its own folder (`rna/`, `ridge/`, `lstm/`, `gradient_boosting/`) with an `entrenar.py` that only defines how to train the model. Everything else — test blocks, timing, metrics, and output files — lives in `comun/experimento.py`, so every algorithm is evaluated and saved identically. To add an algorithm, copy `rna/` and change `entrenar()` and its own options.
 
 ### Data and preprocessing
 
@@ -215,7 +215,18 @@ A **station model** learns from one station's observations. A **global model** l
 
 One-hot encoding represents a category as separate 0/1 columns: for example, hour of day uses 24 columns. Calendar features include hour, weekday, month, and holiday status; optional numerical features are temperature and precipitation.
 
-Inputs are standardized with the mean and deviation of each training block, and networks use early stopping and seed `0` (`--semilla`). Early stopping can finish training sooner.
+Inputs are standardized using only fitting rows (excluding validation), and networks use early stopping and seed `0` (`--semilla`). Early stopping can finish training sooner.
+
+#### Gradient boosting (`gradient_boosting/entrenar.py`)
+
+Carmen's `HistGradientBoostingRegressor`, adapted to this branch's shared runner: global without station ID by default, optional `--con-id-estacion`, or `--modo estacion`. It uses the same folds and output files. No scaling is needed; chronological validation selects the number of boosting iterations.
+
+```bash
+python src/bicimadness/gradient_boosting/entrenar.py sel60 --meteo anterior
+python src/bicimadness/gradient_boosting/entrenar.py sel60 --perdida poisson --nombre sel60_poisson
+```
+
+Options: `--perdida squared_error|absolute_error|poisson` (default `squared_error`), `--iteraciones 300`, `--tasa 0.1`, optional `--profundidad`, and `--validacion-h 168`. Add `--hasta 2022-01-08 --jobs 1` for one test block on `sel60`.
 
 #### Ridge regression (`ridge/entrenar.py`)
 
@@ -277,7 +288,7 @@ Within a test period, predictions use the actual observations preceding each tar
 
 `antiguo/compare_models.py` uses every third fold by default (`--folds-cada 3`). Use `--folds-cada 1` for all folds.
 
-Internal early-stopping validation is separate from this outer evaluation. MLP early stopping uses a random 10 % of the training observations; the LSTM (`lstm/`) uses the last training week, a chronological segment; Ridge chooses its regularization by leave-one-out on the training block.
+Internal validation is separate from this outer evaluation. MLP, LSTM and gradient boosting reserve the last week of each station (`--validacion cronologica`, `--validacion-h 168`). With 52 weeks, 51 fit the model and one selects the best epoch (MLP/LSTM) or boosting iteration. Normalization uses only fitting rows, excluding validation and test. Validation must leave training rows: with 168 validation hours, use at least `--semanas 2`. Ridge keeps its leave-one-out regularization selection.
 
 ### Running experiments
 
@@ -299,7 +310,7 @@ python src/bicimadness/lstm/entrenar.py sel60 --modo global     # LSTM, shared, 
 python src/bicimadness/lstm/entrenar.py sel60 --modo estacion   # LSTM, one per station
 ```
 
-Each run creates `results/<algorithm>/<date>_<name>/` (`rna`, `ridge`, `lstm`); earlier runs are never overwritten. All accept the common options (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). For the full list of options:
+Each run creates `results/<algorithm>/<date>_<name>/` (`rna`, `ridge`, `lstm`, `gradient_boosting`); earlier runs are never overwritten. All accept the common options (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). For the full list of options:
 
 ```bash
 python src/bicimadness/rna/entrenar.py --help
@@ -572,7 +583,7 @@ La **ventana de entrada** de 24 horas es distinta del **horizonte de predicción
 
 `.gitignore` excluye los archivos originales de viajes, los resultados generados, las cachés intermedias y `.venv/`. Los archivos raíz `mempalace.yaml` y `entities.json` son configuración de una herramienta de memoria local; no intervienen en la predicción.
 
-Cada algoritmo tiene su carpeta (`rna/`, `ridge/`, `lstm/`; más adelante `gradient_boosting/`...) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
+Cada algoritmo tiene su carpeta (`rna/`, `ridge/`, `lstm/`, `gradient_boosting/`) con un `entrenar.py` que solo define cómo se entrena el modelo. Todo lo demás —bloques de test, tiempos, métricas y ficheros de resultados— está en `comun/experimento.py`, así que todos los algoritmos se evalúan y se guardan igual. Para añadir un algoritmo, copia `rna/` y cambia `entrenar()` y sus opciones propias.
 
 ### Datos y preprocesado
 
@@ -652,7 +663,7 @@ Un **modelo por estación** aprende de las observaciones de una sola estación. 
 
 La codificación **one-hot** representa cada categoría en columnas de ceros y unos; por ejemplo, la hora del día ocupa 24 columnas. Los atributos de calendario son hora, día de la semana, mes y festivo. Temperatura y precipitación son atributos numéricos opcionales.
 
-Las entradas se estandarizan con la media y la desviación del entrenamiento de cada bloque; las redes usan parada temprana y semilla `0` (`--semilla`). La parada temprana puede finalizar antes.
+Las entradas se estandarizan con la media y la desviación de las filas de ajuste, excluyendo validación; las redes usan parada temprana y semilla `0` (`--semilla`). La parada temprana puede finalizar antes.
 
 #### Regresión Ridge (`ridge/entrenar.py`)
 
@@ -682,6 +693,17 @@ El modo multivariante es el modelo de Manu: puede usar lo que pasa en las demás
 | `--validacion-h` | 168 | Últimas horas del entrenamiento (de cada estación) que se usan para la parada temprana: cronológicas, no al azar |
 
 Se minimiza la pérdida L1 (MAE), se recorta el gradiente a norma 1 y se queda la época con mejor MAE de validación. El historial y el objetivo se estandarizan con la media y la desviación del entrenamiento (por estación en modo multivariante). Se ejecuta en CPU; `LSTM_DISPOSITIVO=mps` prueba la GPU del Mac. `--jobs` vale por defecto 2 en multivariante, 1 en global y todos los núcleos por estación.
+
+#### Gradient boosting (`gradient_boosting/entrenar.py`)
+
+`HistGradientBoostingRegressor` de Carmen adaptado al ejecutor de esta rama: global sin id de estación por defecto, `--con-id-estacion` opcional o `--modo estacion`. Usa los mismos folds y ficheros de resultados. No necesita normalización; la validación cronológica selecciona cuántas iteraciones usar.
+
+```bash
+python src/bicimadness/gradient_boosting/entrenar.py sel60 --meteo anterior
+python src/bicimadness/gradient_boosting/entrenar.py sel60 --perdida poisson --nombre sel60_poisson
+```
+
+Opciones: `--perdida squared_error|absolute_error|poisson` (defecto `squared_error`), `--iteraciones 300`, `--tasa 0.1`, `--profundidad` opcional y `--validacion-h 168`. Añade `--hasta 2022-01-08 --jobs 1` para ejecutar un bloque de test de `sel60`.
 
 #### Comparación anterior de algoritmos (`antiguo/`)
 
@@ -714,7 +736,7 @@ Dentro del test, cada predicción utiliza las observaciones reales anteriores a 
 
 `antiguo/compare_models.py` utiliza por defecto uno de cada tres folds (`--folds-cada 3`). Para utilizarlos todos, indica `--folds-cada 1`.
 
-La validación interna para la parada temprana es distinta de la evaluación externa. La MLP usa un 10 % al azar de las observaciones de entrenamiento; la LSTM (`lstm/`) usa la última semana del entrenamiento, un segmento cronológico; Ridge elige su regularización con leave-one-out sobre el bloque de entrenamiento.
+La validación interna es distinta de la evaluación externa. RNA, LSTM y gradient boosting reservan la última semana de cada estación (`--validacion cronologica`, `--validacion-h 168`). Con 52 semanas, 51 ajustan el modelo y una selecciona la mejor época (RNA/LSTM) o iteración del boosting. La normalización usa solo las filas de ajuste, excluyendo validación y test. La validación debe dejar filas de entrenamiento: con 168 horas de validación, usa como mínimo `--semanas 2`. Ridge conserva su selección de regularización con leave-one-out.
 
 ### Ejecutar experimentos
 
@@ -736,7 +758,7 @@ python src/bicimadness/lstm/entrenar.py sel60 --modo global     # LSTM compartid
 python src/bicimadness/lstm/entrenar.py sel60 --modo estacion   # LSTM, una por estación
 ```
 
-Cada ejecución crea `results/<algoritmo>/<fecha>_<nombre>/` (`rna`, `ridge`, `lstm`); nunca se sobrescriben las anteriores. Todos aceptan las opciones comunes (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). Para ver todas las opciones:
+Cada ejecución crea `results/<algoritmo>/<fecha>_<nombre>/` (`rna`, `ridge`, `lstm`, `gradient_boosting`); nunca se sobrescriben las anteriores. Todos aceptan las opciones comunes (`datos`, `--modo`, `--variables`, `--meteo`, `--ventana`, `--semanas`, `--hasta`...). Para ver todas las opciones:
 
 ```bash
 python src/bicimadness/rna/entrenar.py --help

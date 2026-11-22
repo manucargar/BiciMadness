@@ -75,11 +75,31 @@ def argumentos(descripcion, multivariante=False):
     return p
 
 
+def opciones_validacion(p):
+    """Validación temporal compartida por RNA, LSTM y gradient boosting."""
+    p.add_argument("--validacion", choices=["cronologica"], default="cronologica",
+                   help="validación temporal al final del entrenamiento de cada estación")
+    p.add_argument("--validacion-h", type=int, default=168,
+                   help="últimas horas reservadas para validación (168 = una semana)")
+
+
+def validacion_cronologica(n_filas, args):
+    """Reserva el final de cada estación; en multivariante hay una fila por hora."""
+    n_tr = args.semanas * 7 * 24
+    if not 1 <= args.validacion_h < n_tr:
+        raise ValueError("--validacion-h debe ser al menos 1 y menor que las horas de entrenamiento")
+    if n_filas == 0 or n_filas % n_tr:
+        raise ValueError("las filas deben contener bloques completos de entrenamiento por estación")
+    return (np.arange(n_filas) % n_tr) >= n_tr - args.validacion_h
+
+
 def _validar(args):
     if not 1 <= args.ventana <= D.MAX_VENTANA:
         raise SystemExit(f"--ventana debe estar entre 1 y {D.MAX_VENTANA}")
     if not 1 <= args.semanas <= D.MAX_SEMANAS:
         raise SystemExit(f"--semanas debe estar entre 1 y {D.MAX_SEMANAS}")
+    if hasattr(args, "validacion_h") and not 1 <= args.validacion_h < args.semanas * 7 * 24:
+        raise SystemExit("--validacion-h debe ser al menos 1 y menor que las horas de entrenamiento")
     nombres = {"todas": list(D.VARIABLES), "ninguna": []}.get(args.variables, args.variables.split(","))
     for n in set(nombres) - set(D.VARIABLES):
         raise SystemExit(f"variable desconocida '{n}'. Disponibles: {', '.join(D.VARIABLES)}")
@@ -87,15 +107,25 @@ def _validar(args):
     args.hasta_fecha = datetime.strptime(args.hasta, "%Y-%m-%d") if args.hasta else None
 
 
-def escalar_en_sitio(X, trozo=200_000):
+def escalar_en_sitio(X, trozo=200_000, entrenamiento=None):
     """Estandariza X (media 0, desviación 1 por columna) sin copiarla; -> (media, desviación).
 
+    Si se da la máscara entrenamiento, solo esas filas definen la escala; se transforma todo X.
     Con muchas estaciones la matriz global ocupa GB: StandardScaler haría otra copia entera."""
     n = len(X)
-    suma = sum(X[i:i + trozo].sum(axis=0, dtype=np.float64) for i in range(0, n, trozo))
-    media = suma / n
-    cuad = sum(((X[i:i + trozo] - media) ** 2).sum(axis=0) for i in range(0, n, trozo))
-    desv = np.sqrt(cuad / n)
+
+    def partes():
+        for i in range(0, n, trozo):
+            parte = X[i:i + trozo]
+            yield parte if entrenamiento is None else parte[entrenamiento[i:i + trozo]]
+
+    n_ajuste = n if entrenamiento is None else np.count_nonzero(entrenamiento)
+    if n_ajuste == 0:
+        raise ValueError("no hay filas de entrenamiento para calcular la escala")
+    suma = sum(parte.sum(axis=0, dtype=np.float64) for parte in partes())
+    media = suma / n_ajuste
+    cuad = sum(((parte - media) ** 2).sum(axis=0) for parte in partes())
+    desv = np.sqrt(cuad / n_ajuste)
     desv[desv == 0] = 1
     for i in range(0, n, trozo):
         X[i:i + trozo] -= media.astype(X.dtype)

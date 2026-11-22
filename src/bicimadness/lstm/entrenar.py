@@ -34,7 +34,7 @@ import numpy as np  # noqa: E402
 import torch  # noqa: E402
 from torch import nn  # noqa: E402
 
-from bicimadness.comun.experimento import argumentos, ejecutar  # noqa: E402
+from bicimadness.comun.experimento import argumentos, ejecutar, opciones_validacion, validacion_cronologica  # noqa: E402
 
 # En la GPU del Mac (mps) la LSTM se queda sin memoria con 8 GB: CPU por defecto (LSTM_DISPOSITIVO=mps para probar)
 DISPOSITIVO = os.environ.get("LSTM_DISPOSITIVO", "cpu")
@@ -80,21 +80,13 @@ class LSTMEscalada:
         return p if self.c > 1 else p[:, 0]
 
 
-def _validacion(n_filas, args):
-    """Máscara de las últimas args.validacion_h horas del entrenamiento (de cada estación en modo global).
-
-    Las filas van en orden de tiempo; en modo global, apiladas por estación (semanas*168 cada una)."""
-    n_tr = args.semanas * 7 * 24
-    return (np.arange(n_filas) % n_tr) >= n_tr - args.validacion_h
-
-
 def entrenar(X, y, args):
     torch.manual_seed(args.semilla)
     if args.modo == "estacion":
         torch.set_num_threads(1)  # muchos modelos pequeños en paralelo (joblib): un hilo cada uno
     y = y.reshape(len(y), -1)  # (filas x estaciones); 1 columna salvo en multivariante
     n, c = args.ventana, y.shape[1]
-    val = _validacion(len(y), args)
+    val = validacion_cronologica(len(y), args)
     ent = ~val
     # escalado solo con la parte de entrenamiento; historial y objetivo con la misma escala (por estación)
     media_y, desv_y = y[ent].mean(axis=0), y[ent].std(axis=0)
@@ -148,11 +140,10 @@ def main():
     p.add_argument("--lote", type=int, default=256, help="ejemplos por paso de entrenamiento (256)")
     p.add_argument("--lr", type=float, default=1e-3, help="tasa de aprendizaje de AdamW")
     p.add_argument("--weight-decay", type=float, default=1e-5, help="weight decay de AdamW")
-    p.add_argument("--validacion-h", type=int, default=168,
-                   help="últimas horas del entrenamiento que se usan para parar (168 = 1 semana)")
+    opciones_validacion(p)
     args = p.parse_args()
-    if not 1 <= args.validacion_h < args.semanas * 7 * 24:
-        raise SystemExit("--validacion-h debe ser menor que las horas de entrenamiento")
+    if args.epocas < 1:
+        p.error("--epocas debe ser al menos 1")
     if args.jobs is None and args.modo == "global":
         args.jobs = 1  # un bloque cada vez, usando todos los núcleos
     ejecutar("lstm", args, entrenar)
