@@ -11,8 +11,9 @@ Uso:  python src/bicimadness/comparar_algoritmos.py
       (solo los modelos globales que no saben qué estación es: RNA, Ridge y LSTM globales)
       python src/bicimadness/comparar_algoritmos.py --datos sel60 --modo global multivariante --id-estacion no
       (RNA y Ridge globales frente al LSTM multivariante)
+      python src/bicimadness/comparar_algoritmos.py --datos sel60_filtrada --nombre-salida comparacion_sel60_filtrada
 
-Salidas: results/comparacion_algoritmos.csv y results/comparacion_algoritmos_ttest.csv
+Salidas por defecto: results/comparacion_algoritmos.csv y results/comparacion_algoritmos_ttest.csv
 """
 import argparse
 import sys
@@ -33,7 +34,11 @@ def main():
                    help="solo las ejecuciones de estos modos (uno o varios)")
     p.add_argument("--id-estacion", choices=["sí", "si", "no"], help="solo las ejecuciones con (sí) o sin (no) id de estación")
     p.add_argument("--meteo", choices=["actual", "anterior"], help="solo las ejecuciones con esta meteorología")
+    p.add_argument("--nombre-salida", default="comparacion_algoritmos",
+                   help="nombre base de los CSV en results/ (por defecto comparacion_algoritmos)")
     args = p.parse_args()
+    if not args.nombre_salida or Path(args.nombre_salida).name != args.nombre_salida:
+        p.error("--nombre-salida debe ser un nombre de fichero sin ruta")
     if args.id_estacion == "si":
         args.id_estacion = "sí"
 
@@ -84,9 +89,11 @@ def main():
         C.tabla([x for x in pruebas if x["datos"] == datos],
                 ["algoritmo_a", "algoritmo_b", "t", "p", "diferencia_significativa", "n_pares"])
 
-    C.escribir(RESULTADOS / "comparacion_algoritmos.csv", filas)
-    C.escribir(RESULTADOS / "comparacion_algoritmos_ttest.csv", pruebas)
-    print("\nGuardado en results/comparacion_algoritmos.csv y results/comparacion_algoritmos_ttest.csv")
+    salida = RESULTADOS / f"{args.nombre_salida}.csv"
+    salida_ttest = RESULTADOS / f"{args.nombre_salida}_ttest.csv"
+    C.escribir(salida, filas)
+    C.escribir(salida_ttest, pruebas)
+    print(f"\nGuardado en {salida} y {salida_ttest}")
 
 
 if __name__ == "__main__":

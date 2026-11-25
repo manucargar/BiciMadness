@@ -19,9 +19,13 @@ RESULTADOS = PROYECTO / "results"
 ALIAS = {
     "top50": PROCESADOS / "salidas_por_hora_top50.csv",
     "sel60": PROCESADOS / "salidas_por_hora_sel60.csv",
+    "sel60_filtrada": PROCESADOS / "salidas_por_hora_sel60_filtrada.csv",
 }
 # CSV de estaciones con columna "grupo" (para errores_por_grupo.csv), por nombre del CSV de salidas
-GRUPOS = {"salidas_por_hora_sel60.csv": PROCESADOS / "estaciones_seleccionadas.csv"}
+GRUPOS = {
+    "salidas_por_hora_sel60.csv": PROCESADOS / "estaciones_seleccionadas.csv",
+    "salidas_por_hora_sel60_filtrada.csv": PROCESADOS / "estaciones_seleccionadas_filtradas.csv",
+}
 
 VARIABLES = {
     "hora": "hora del día, nominal (24 columnas 0/1)",
